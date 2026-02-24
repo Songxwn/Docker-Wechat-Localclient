@@ -16,6 +16,8 @@ const DEFAULT_CONNECTION = {
   url: DEFAULT_URL,
   ignoreSsl: true,
   openExternal: false,
+  username: '',
+  password: '',
 };
 
 function getConnections() {
@@ -109,6 +111,8 @@ ipcMain.handle('save-connection', (_e, conn) => {
     url: conn.url || DEFAULT_URL,
     ignoreSsl: conn.ignoreSsl !== false,
     openExternal: !!conn.openExternal,
+    username: (conn.username || '').trim(),
+    password: conn.password != null ? String(conn.password) : '',
   };
   const idx = list.findIndex((c) => c.id === id);
   if (idx >= 0) list[idx] = entry;
@@ -166,6 +170,23 @@ ipcMain.handle('open-wechat', async (_e, opts) => {
   } catch (_) {}
   if (conn.ignoreSsl) {
     wechatWin.webContents.session.setCertificateVerifyProc((_, callback) => callback(0));
+  }
+  const username = (conn.username || '').trim();
+  const password = conn.password != null ? String(conn.password) : '';
+  if (username || password) {
+    try {
+      const u = new URL(url);
+      const origin = u.origin;
+      const auth = Buffer.from(`${username}:${password}`).toString('base64');
+      wechatWin.webContents.session.webRequest.onBeforeSendHeaders(
+        { urls: [origin + '/*', origin] },
+        (details, callback) => {
+          const headers = { ...details.requestHeaders };
+          headers['Authorization'] = 'Basic ' + auth;
+          callback({ requestHeaders: headers });
+        }
+      );
+    } catch (_) {}
   }
   wechatWin.webContents.setWindowOpenHandler(({ url: u }) => {
     shell.openExternal(u);

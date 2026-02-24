@@ -8,6 +8,7 @@
 - 在应用内新窗口打开微信页面，或按连接配置使用系统默认浏览器打开
 - **剪贴板共享**：支持与 Docker 内 wechat-selkies 共享剪贴板，文字和图片可在本机复制后于网页版微信中粘贴发送
 - **文件拖入上传**：支持将本机文件拖入窗口，自动上传到 Docker 内部，便于在微信中发送文件
+- **账号密码认证（可选）**：连接时可配置登录用户名与密码，打开网页时自动使用 HTTP Basic 认证（适用于 wechat-selkies 配置了 PASSWORD 等鉴权时）
 - 每个连接可单独设置：忽略 SSL 证书错误、是否用系统浏览器打开
 - 设置持久化保存
 - 可选系统托盘（需放置 `assets/tray.png`）
@@ -36,12 +37,49 @@ npm run build
 
 安装包输出在 `dist/` 目录，可分发安装。
 
+## 全平台安装包构建说明
+
+需先安装依赖：`npm install`。以下命令在对应系统上执行，生成的安装包在 `dist/` 目录。
+
+| 平台 | 命令 | 产出说明 |
+|------|------|----------|
+| **Windows** | `npm run build` 或 `npm run build:win` | `dist/` 下生成 NSIS 安装包（.exe），支持选择安装路径。 |
+| **macOS** | `npm run build:mac` | 在 macOS 上执行，生成 `.dmg` 镜像；需 Xcode 命令行工具（`xcode-select --install`）。 |
+| **Linux** | `npm run build:linux` | 在 Linux 上执行，生成 `.AppImage` 单文件可执行；部分发行版需安装 `libfuse2`（如 Ubuntu：`sudo apt install libfuse2`）。 |
+| **当前平台** | `npm run build:dir` | 仅生成未打包的可运行目录（如 Windows 的 `win-unpacked`），便于本地调试。 |
+
+**一次性构建多平台（需在各自系统上分别执行）**：
+
+- 在 Windows 上：`npm run build:win`
+- 在 macOS 上：`npm run build:mac`
+- 在 Linux 上：`npm run build:linux`
+
+若在 **同一台机器** 上希望一条命令打出多平台包，可执行：
+
+```bash
+npm run build:all
+```
+
+`build:all` 会根据当前操作系统生成当前平台安装包；要得到 Windows / macOS / Linux 三种安装包，仍需在各自系统（或 CI 中对应环境）下分别执行上述 `build:win` / `build:mac` / `build:linux`。
+
 ## 使用说明
 
 1. 确保 wechat-selkies 已在 Docker 或远程服务器上运行，并记下访问地址（如 `https://localhost:3001` 或 `https://服务器IP:3001`）。
 2. 启动本客户端，点击「添加连接」填写名称与服务地址，并设置是否忽略 SSL、是否用系统浏览器打开，保存。
 3. 在列表中点击某连接的「连接」即可打开该 wechat-selkies 页面；可「编辑」「删除」或「设为默认」。
 4. 首次使用若无任何连接，会有一个默认的「本地微信」连接（`https://localhost:3001`），可直接编辑或新增其他连接。
+
+## 项目架构说明
+
+本客户端基于 **Electron** 构建，采用典型的主进程 + 渲染进程架构。
+
+| 层级 | 说明 |
+|------|------|
+| **主进程 (main.js)** | Node 环境，负责创建窗口、系统托盘、IPC 处理；连接数据的增删改查（通过 electron-store 持久化）；打开 wechat-selkies 网页时创建新 BrowserWindow、注入 SSL 忽略与 HTTP Basic 认证。 |
+| **预加载脚本 (preload.js)** | 在渲染进程内运行，通过 `contextBridge` 向页面暴露有限的 `wechatClient` API（如 `getConnections`、`saveConnection`、`openWechat`），避免渲染进程直接访问 Node/Electron，保证安全与兼容。 |
+| **渲染进程** | 浏览器环境，由 `index.html` + `styles.css` + `renderer.js` 组成；负责连接列表展示、添加/编辑弹窗、与主进程通过 IPC 通信。 |
+
+**技术栈**：Electron、electron-store（本地配置存储）、原生 HTML/CSS/JS（无前端框架）。打包使用 electron-builder，支持 Windows / macOS / Linux 安装包。
 
 ## 项目结构
 
@@ -54,7 +92,8 @@ wechat-C/
 ├── renderer.js      # 启动页逻辑
 ├── assets/          # 可选图标（icon.png、tray.png）
 ├── package.json
-└── README.md
+├── README.md
+└── 使用说明.md
 ```
 
 ## 图标（可选）

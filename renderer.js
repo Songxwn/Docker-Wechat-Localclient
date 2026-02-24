@@ -11,6 +11,8 @@
   const editId = document.getElementById('editId');
   const connName = document.getElementById('connName');
   const connUrl = document.getElementById('connUrl');
+  const connUsername = document.getElementById('connUsername');
+  const connPassword = document.getElementById('connPassword');
   const connIgnoreSsl = document.getElementById('connIgnoreSsl');
   const connOpenExternal = document.getElementById('connOpenExternal');
   const btnModalCancel = document.getElementById('btnModalCancel');
@@ -126,6 +128,8 @@
       editId.value = conn.id;
       connName.value = conn.name || '';
       connUrl.value = conn.url || DEFAULT_URL;
+      connUsername.value = conn.username || '';
+      connPassword.value = conn.password != null ? conn.password : '';
       connIgnoreSsl.checked = conn.ignoreSsl !== false;
       connOpenExternal.checked = !!conn.openExternal;
     } else {
@@ -133,6 +137,8 @@
       editId.value = '';
       connName.value = '';
       connUrl.value = DEFAULT_URL;
+      connUsername.value = '';
+      connPassword.value = '';
       connIgnoreSsl.checked = true;
       connOpenExternal.checked = false;
     }
@@ -149,18 +155,26 @@
     const id = editId.value || undefined;
     const name = connName.value.trim() || '未命名';
     const url = normalizeUrl(connUrl.value) || DEFAULT_URL;
+    const username = connUsername.value.trim();
+    const password = connPassword.value;
     if (typeof wechatClient === 'undefined') return;
+    // 先立即关闭弹窗，避免等待 IPC 时界面卡住
+    closeModal();
     btnModalSave.disabled = true;
     try {
       await wechatClient.saveConnection({
         id: id || undefined,
         name,
         url,
+        username,
+        password,
         ignoreSsl: connIgnoreSsl.checked,
         openExternal: connOpenExternal.checked,
       });
-      closeModal();
       await loadConnections();
+    } catch (err) {
+      console.error(err);
+      openModal({ id, name, url, username, password, ignoreSsl: connIgnoreSsl.checked, openExternal: connOpenExternal.checked });
     } finally {
       btnModalSave.disabled = false;
     }

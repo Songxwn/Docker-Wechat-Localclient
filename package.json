@@ -1,6 +1,6 @@
 {
   "name": "wechat-selkies-client",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "WeChat Selkies 的本地远程客户端",
   "main": "main.js",
   "author": "WeChat Selkies Client",
@@ -8,6 +8,10 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder -mwl",
     "build:dir": "electron-builder --win --dir"
   },
   "devDependencies": {
@@ -29,6 +33,13 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "category": "public.app-category.social",
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
     }
   }
 }

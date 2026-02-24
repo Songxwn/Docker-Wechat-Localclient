@@ -54,6 +54,14 @@
           <input type="text" id="connUrl" placeholder="https://localhost:3001" required />
           <span class="hint">本地一般为 https://localhost:3001，远程填写服务器地址</span>
         </div>
+        <div class="field">
+          <label for="connUsername">登录用户名（可选）</label>
+          <input type="text" id="connUsername" placeholder="未填写则不进行账号密码认证" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="connPassword">登录密码（可选）</label>
+          <input type="password" id="connPassword" placeholder="与用户名同时填写时生效" autocomplete="current-password" />
+        </div>
         <div class="options">
           <label class="checkbox">
             <input type="checkbox" id="connIgnoreSsl" checked />
