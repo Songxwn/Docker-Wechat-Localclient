@@ -366,6 +366,12 @@ body {
   color: var(--link);
 }
 
+.footer-version {
+  margin-right: 0.5rem;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .footer-sep {
   margin: 0 0.5rem;
   color: var(--text-muted);

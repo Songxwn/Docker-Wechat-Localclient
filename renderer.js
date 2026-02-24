@@ -186,5 +186,25 @@
     if (e.target === modalOverlay) closeModal();
   });
 
+  // 部署说明等链接用系统默认浏览器打开
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a.open-in-browser');
+    if (a && a.href && typeof wechatClient !== 'undefined') {
+      e.preventDefault();
+      wechatClient.openExternal(a.href);
+    }
+  });
+
+  async function showAppVersion() {
+    const el = document.getElementById('appVersion');
+    if (el && typeof wechatClient !== 'undefined') {
+      try {
+        const v = await wechatClient.getAppVersion();
+        if (v) el.textContent = 'v' + v;
+      } catch (_) {}
+    }
+  }
+
+  showAppVersion();
   loadConnections();
 })();

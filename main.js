@@ -4,6 +4,7 @@ const Store = require('electron-store');
 const { randomUUID } = require('crypto');
 
 const store = new Store();
+const appVersion = require('./package.json').version;
 
 const DEFAULT_URL = 'https://localhost:3001';
 const CONFIG_KEYS = {
@@ -95,6 +96,9 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
   else mainWindow?.show();
 });
+
+// 应用版本（供界面显示）
+ipcMain.handle('get-app-version', () => appVersion);
 
 // 连接列表
 ipcMain.handle('get-connections', () => ({
