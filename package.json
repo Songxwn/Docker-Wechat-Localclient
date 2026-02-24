@@ -1,6 +1,6 @@
 {
   "name": "wechat-selkies-client",
-  "version": "4.5.3",
+  "version": "4.5.5",
   "description": "WeChat Selkies 的本地远程客户端",
   "main": "main.js",
   "author": "WeChat Selkies Client",
