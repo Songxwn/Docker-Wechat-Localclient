@@ -62,6 +62,16 @@ npm run build:all
 
 `build:all` 会根据当前操作系统生成当前平台安装包；要得到 Windows / macOS / Linux 三种安装包，仍需在各自系统（或 CI 中对应环境）下分别执行上述 `build:win` / `build:mac` / `build:linux`。
 
+### GitHub Actions 自动构建
+
+仓库内已配置 GitHub Actions（`.github/workflows/build.yml`），在以下情况会自动构建全平台安装包：
+
+- **push** 到 `main` 或 `master` 分支
+- **pull_request** 指向 `main` / `master`
+- 发布 **Release**（发布新版本时）
+
+每次运行会在 Windows / macOS / Linux 三个 runner 上并行执行，生成对应平台的安装包并上传为 Artifacts（`installers-win`、`installers-mac`、`installers-linux`）。在 Actions 页面对应 run 的摘要页可下载各平台产物。
+
 ## 使用说明
 
 1. 确保 wechat-selkies 已在 Docker 或远程服务器上运行，并记下访问地址（如 `https://localhost:3001` 或 `https://服务器IP:3001`）。
@@ -106,6 +116,7 @@ wechat-C/
 
 ## 相关链接
 
+- [部署说明](https://songxwn.com/cloud-wechat/) - 云端微信在服务器持久化存储和运行
 - [wechat-selkies](https://github.com/nickrunning/wechat-selkies) - 基于 Selkies 的 Linux 网页版微信/QQ
 
 ## 许可证

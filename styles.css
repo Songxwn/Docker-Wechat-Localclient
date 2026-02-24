@@ -365,3 +365,8 @@ body {
 .footer a:hover {
   color: var(--link);
 }
+
+.footer-sep {
+  margin: 0 0.5rem;
+  color: var(--text-muted);
+}

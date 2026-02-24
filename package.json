@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "com.wechat-selkies.client",
-    "productName": "WeChat Selkies",
+    "productName": "WeChat Selkies - 本地远程客户端",
     "directories": {
       "output": "dist"
     },
