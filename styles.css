@@ -76,7 +76,8 @@ body {
   color: var(--text);
 }
 
-.field input[type="text"] {
+.field input[type="text"],
+.field input[type="password"] {
   width: 100%;
   padding: 0.65rem 0.85rem;
   font-size: 14px;
@@ -89,7 +90,8 @@ body {
   transition: border-color 0.15s;
 }
 
-.field input[type="text"]:focus {
+.field input[type="text"]:focus,
+.field input[type="password"]:focus {
   border-color: var(--accent);
 }
 
