@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>WeChat Selkies 客户端</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="title">WeChat Selkies</h1>
+      <p class="subtitle">管理连接并打开 wechat-selkies 网页版微信</p>
+    </header>
+
+    <main class="main">
+      <section class="connections-section">
+        <div class="section-head">
+          <h2 class="section-title">已保存的连接</h2>
+          <button type="button" class="btn btn-primary" id="btnAdd">+ 添加连接</button>
+        </div>
+        <ul class="connection-list" id="connectionList"></ul>
+        <p class="empty-hint" id="emptyHint">暂无连接，点击「添加连接」保存一个。</p>
+      </section>
+
+      <section class="tips" id="tips">
+        <h3>使用说明</h3>
+        <ul>
+          <li>请先在 Linux / Docker 中部署 <a href="https://github.com/nickrunning/wechat-selkies" target="_blank" rel="noopener">wechat-selkies</a>，并确保端口 3001 可访问。</li>
+          <li>若在本机通过 WSL2 或远程 Linux 运行，请将 <strong>localhost</strong> 改为对应 IP（如 <code>https://192.168.x.x:3001</code>）。</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <a href="https://github.com/nickrunning/wechat-selkies" target="_blank" rel="noopener">wechat-selkies 项目</a>
+    </footer>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" id="modal">
+      <h3 class="modal-title" id="modalTitle">添加连接</h3>
+      <form id="connectionForm" class="connection-form">
+        <input type="hidden" id="editId" />
+        <div class="field">
+          <label for="connName">名称</label>
+          <input type="text" id="connName" placeholder="例如：本地微信、公司服务器" required />
+        </div>
+        <div class="field">
+          <label for="connUrl">服务地址</label>
+          <input type="text" id="connUrl" placeholder="https://localhost:3001" required />
+          <span class="hint">本地一般为 https://localhost:3001，远程填写服务器地址</span>
+        </div>
+        <div class="options">
+          <label class="checkbox">
+            <input type="checkbox" id="connIgnoreSsl" checked />
+            <span>忽略 SSL 证书错误</span>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="connOpenExternal" />
+            <span>使用系统默认浏览器打开</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="btnModalCancel">取消</button>
+          <button type="submit" class="btn btn-primary" id="btnModalSave">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
