@@ -46,9 +46,9 @@ npm run build
 
 | 平台 | 命令 | 产出说明 |
 |------|------|----------|
-| **Windows** | `npm run build` 或 `npm run build:win` | `dist/` 下生成 NSIS 安装包（.exe），支持选择安装路径。 |
-| **macOS** | `npm run build:mac` | 在 macOS 上执行，生成 `.dmg` 镜像；需 Xcode 命令行工具（`xcode-select --install`）。 |
-| **Linux** | `npm run build:linux` | 在 Linux 上执行，生成 `.AppImage` 单文件可执行；部分发行版需安装 `libfuse2`（如 Ubuntu：`sudo apt install libfuse2`）。 |
+| **Windows** | `npm run build` 或 `npm run build:win` | `dist/` 下生成 NSIS 安装包（.exe）；本地默认当前架构，CI 会产出 x64 与 ARM64。 |
+| **macOS** | `npm run build:mac` | 在 macOS 上执行，生成 `.dmg`；本地默认当前架构，CI 会产出 x64（Intel）与 ARM64（Apple Silicon）。需 Xcode 命令行工具（`xcode-select --install`）。 |
+| **Linux** | `npm run build:linux` | 在 Linux 上执行，生成 `.AppImage`；部分发行版需安装 `libfuse2`（如 Ubuntu：`sudo apt install libfuse2`）。 |
 | **当前平台** | `npm run build:dir` | 仅生成未打包的可运行目录（如 Windows 的 `win-unpacked`），便于本地调试。 |
 
 **一次性构建多平台（需在各自系统上分别执行）**：
@@ -73,9 +73,11 @@ npm run build:all
 - **pull_request** 指向 `main` / `master`
 - 发布 **Release**（发布新版本时）
 
-每次运行会在 Windows / macOS / Linux 三个 runner 上并行执行，生成对应平台的安装包并上传为 Artifacts（`installers-win`、`installers-mac`、`installers-linux`）。在 Actions 页面对应 run 的摘要页可下载各平台产物。
+每次运行会并行构建：**Windows**（x64、ARM64）、**macOS**（x64 / Intel、ARM64 / Apple Silicon）、**Linux**（x64），并上传为 Artifacts。推送 tag 时会自动创建 GitHub Release 并上传上述安装包。安装包文件名使用英文（`WeChat-Selkies-Client-版本-系统-架构.扩展名`），避免 Release 页中文文件名兼容问题。
 
 ## 界面展示
+
+![主界面展示](docs/images/interface.png)
 
 主界面包含：**已保存的连接** 列表（名称、地址、默认标签及「连接」「编辑」「删除」等操作）、右上角 **「+ 添加连接」**、**使用说明** 区域（含部署说明链接、剪贴板与文件拖入说明）、页脚 **版本号** 与相关链接。点击「连接」可在应用内或系统浏览器打开 wechat-selkies 网页；添加/编辑连接在弹窗中配置名称、服务地址、可选账号密码及 SSL/浏览器选项。详见 [使用说明](使用说明.md)。
 
@@ -113,13 +115,12 @@ wechat-C/
 └── 使用说明.md
 ```
 
-## 图标（可选）
+## 图标
 
-在 `assets/` 下可放置：
+打包默认使用项目内 `assets/icon.png`（安装包与窗口图标）和 `assets/tray.png`（系统托盘图标）；无需额外配置即可在安装包中生效。若需自定义，可替换上述文件：
 
-- `icon.png`：主窗口与微信窗口图标
+- `icon.png`：主窗口与安装包图标（当前已配置为打包默认）
 - `tray.png`：系统托盘图标（存在时启用托盘）
-- 打包时若需自定义安装包图标，可在 `package.json` 的 `build.win` 中设置 `"icon": "assets/icon.ico"`
 
 ## 相关链接
 

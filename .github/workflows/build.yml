@@ -15,15 +15,28 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-            script: build:win
+            arch: x64
+            build_cmd: "npx electron-builder --win --x64"
+            artifact_glob: "dist/*.exe"
+          - os: windows-latest
+            platform: win
+            arch: arm64
+            build_cmd: "npx electron-builder --win --arm64"
             artifact_glob: "dist/*.exe"
           - os: macos-latest
             platform: mac
-            script: build:mac
+            arch: x64
+            build_cmd: "npx electron-builder --mac --x64"
+            artifact_glob: "dist/*.dmg"
+          - os: macos-latest
+            platform: mac
+            arch: arm64
+            build_cmd: "npx electron-builder --mac --arm64"
             artifact_glob: "dist/*.dmg"
           - os: ubuntu-latest
             platform: linux
-            script: build:linux
+            arch: x64
+            build_cmd: "npm run build:linux"
             artifact_glob: "dist/*.AppImage"
 
     runs-on: ${{ matrix.os }}
@@ -46,13 +59,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build ${{ matrix.platform }}
-        run: npm run ${{ matrix.script }}
+      - name: Build ${{ matrix.platform }}-${{ matrix.arch }}
+        run: ${{ matrix.build_cmd }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ matrix.platform }}
+          name: installers-${{ matrix.platform }}-${{ matrix.arch }}
           path: ${{ matrix.artifact_glob }}
 
   release:
@@ -76,9 +89,6 @@ jobs:
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-          files: |
-            artifacts/installers-win/*
-            artifacts/installers-mac/*
-            artifacts/installers-linux/*
+          files: artifacts/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

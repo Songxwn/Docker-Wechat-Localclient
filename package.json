@@ -1,6 +1,6 @@
 {
   "name": "wechat-selkies-client",
-  "version": "4.5.2",
+  "version": "4.5.3",
   "description": "WeChat Selkies 的本地远程客户端",
   "main": "main.js",
   "author": "WeChat Selkies Client",
@@ -25,6 +25,7 @@
     "appId": "com.wechat-selkies.client",
     "productName": "WeChat Selkies - 本地远程客户端",
     "icon": "assets/icon.png",
+    "artifactName": "WeChat-Selkies-Client-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
