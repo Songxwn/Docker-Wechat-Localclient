@@ -72,6 +72,10 @@ npm run build:all
 
 每次运行会在 Windows / macOS / Linux 三个 runner 上并行执行，生成对应平台的安装包并上传为 Artifacts（`installers-win`、`installers-mac`、`installers-linux`）。在 Actions 页面对应 run 的摘要页可下载各平台产物。
 
+## 界面展示
+
+主界面包含：**已保存的连接** 列表（名称、地址、默认标签及「连接」「编辑」「删除」等操作）、右上角 **「+ 添加连接」**、**使用说明** 区域（含部署说明链接、剪贴板与文件拖入说明）、页脚 **版本号** 与相关链接。点击「连接」可在应用内或系统浏览器打开 wechat-selkies 网页；添加/编辑连接在弹窗中配置名称、服务地址、可选账号密码及 SSL/浏览器选项。详见 [使用说明](使用说明.md)。
+
 ## 使用说明
 
 1. 确保 wechat-selkies 已在 Docker 或远程服务器上运行，并记下访问地址（如 `https://localhost:3001` 或 `https://服务器IP:3001`）。
