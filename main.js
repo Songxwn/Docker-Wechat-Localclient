@@ -42,7 +42,7 @@ function createWindow() {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    title: 'WeChat Selkies',
+    title: 'WeChat Selkies - 本地远程客户端',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -71,7 +71,7 @@ function createTray() {
     { label: '显示主窗口', click: () => mainWindow?.show() },
     { label: '退出', click: () => app.quit() },
   ]);
-  tray.setToolTip('WeChat Selkies');
+  tray.setToolTip('WeChat Selkies - 本地远程客户端');
   tray.setContextMenu(contextMenu);
   tray.on('double-click', () => mainWindow?.show());
 }

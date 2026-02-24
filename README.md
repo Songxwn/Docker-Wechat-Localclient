@@ -1,6 +1,6 @@
-# WeChat Selkies - Windows 客户端
+# WeChat Selkies - 本地远程客户端
 
-[wechat-selkies](https://github.com/nickrunning/wechat-selkies) 的 Windows 桌面客户端，用于连接 wechat-selkies 服务并在本机以桌面应用形式使用网页版微信/QQ。
+[wechat-selkies](https://github.com/nickrunning/wechat-selkies) 的本地远程客户端，用于连接 wechat-selkies 服务并在本机以桌面应用形式使用网页版微信/QQ。
 
 ## 功能
 

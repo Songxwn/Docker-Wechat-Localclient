@@ -1,7 +1,7 @@
 {
   "name": "wechat-selkies-client",
-  "version": "1.0.0",
-  "description": "WeChat Selkies 的 Windows 桌面客户端",
+  "version": "2.0.0",
+  "description": "WeChat Selkies 的本地远程客户端",
   "main": "main.js",
   "author": "WeChat Selkies Client",
   "license": "MIT",
