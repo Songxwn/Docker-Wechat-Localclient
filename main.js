@@ -80,6 +80,7 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createWindow();
   try {
     const trayPath = path.join(__dirname, 'assets', 'tray.png');

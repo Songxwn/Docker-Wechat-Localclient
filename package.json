@@ -31,11 +31,15 @@
     },
     "publish": null,
     "win": {
-      "target": ["nsis"]
+      "target": ["nsis"],
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icon.png",
+      "uninstallerIcon": "assets/icon.png",
+      "createDesktopShortcut": true
     },
     "mac": {
       "category": "public.app-category.social",
