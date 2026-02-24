@@ -16,12 +16,15 @@ jobs:
           - os: windows-latest
             platform: win
             script: build:win
+            artifact_glob: "dist/*.exe"
           - os: macos-latest
             platform: mac
             script: build:mac
+            artifact_glob: "dist/*.dmg"
           - os: ubuntu-latest
             platform: linux
             script: build:linux
+            artifact_glob: "dist/*.AppImage"
 
     runs-on: ${{ matrix.os }}
 
@@ -50,7 +53,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: installers-${{ matrix.platform }}
-          path: dist/
+          path: ${{ matrix.artifact_glob }}
 
   release:
     needs: build

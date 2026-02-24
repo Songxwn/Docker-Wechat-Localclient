@@ -15,9 +15,12 @@
 
 ## 环境要求
 
-- Windows 10/11
-- Node.js 18+（仅开发/构建时需要）
-- 已部署的 wechat-selkies 服务（Docker/Linux 等），且本机可访问其 HTTPS 端口（通常 3001）
+- **系统**（任选其一）：
+  - **Windows**：Windows 10 或 Windows 11（x64）
+  - **macOS**：macOS 10.15 (Catalina) 及以上，支持 Intel 与 Apple Silicon (ARM64)
+  - **Linux**：主流发行版（如 Ubuntu 20.04+、Debian 11+、Fedora 36+ 等），x64 或 ARM64；使用 AppImage 时部分系统需安装 `libfuse2`
+- **Node.js**：18 及以上（仅从源码运行或本地构建时需要）
+- **wechat-selkies 服务**：已在 Docker 或 Linux 服务器上运行，且本机可访问其 HTTPS 地址（通常为 `https://IP或域名:3001`）
 
 ## 快速开始
 
