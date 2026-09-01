@@ -4,8 +4,9 @@ publish_to: "none"
 version: 5.0.0+1
 
 environment:
-  sdk: ">=3.3.0 <4.0.0"
-  flutter: ">=3.19.0"
+  # flutter_inappwebview 6.2.0-beta.x 要求 Dart ^3.8.0 / Flutter >=3.32.0
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.32.0"
 
 dependencies:
   flutter:
@@ -15,9 +16,11 @@ dependencies:
   shared_preferences: ^2.2.3
   uuid: ^4.4.0
   url_launcher: ^6.3.0
-  flutter_inappwebview: ^6.1.5
-  # Windows 内置浏览器实现（WebView2），使 Windows 桌面端也用应用内浏览器
-  flutter_inappwebview_windows: ^0.6.0
+  # 6.2.0-beta.x 起 Windows(WebView2) 才实现 onReceivedServerTrustAuthRequest，
+  # 即“忽略 SSL 证书错误”回调，故升级到 beta 以使 Windows 内置浏览器支持自签名证书。
+  flutter_inappwebview: ^6.2.0-beta.3
+  # Windows 内置浏览器实现（WebView2）
+  flutter_inappwebview_windows: ^0.7.0-beta.3
 
 dev_dependencies:
   flutter_lints: ^4.0.0
