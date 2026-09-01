@@ -27,15 +27,18 @@ jobs:
       - run: flutter create --project-name wechat_selkies_client --platforms=android .
       - name: Patch Android Gradle (AGP 8.9.1 + NDK 27) for inappwebview beta
         run: |
+          # Flutter 3.32 生成 Kotlin DSL(.kts)
+          SETTINGS=android/settings.gradle.kts
+          APP=android/app/build.gradle.kts
           # 升级 AGP 到 8.9.1（beta 依赖 androidx.browser:1.9.0 要求 >=8.9.1）
-          sed -i -E "s/(id \"com.android.application\") version \"[0-9.]+\"/\1 version \"8.9.1\"/" android/settings.gradle
-          sed -i -E "s/(id \"org.jetbrains.kotlin.android\") version \"[0-9.]+\"/\1 version \"2.1.0\"/" android/settings.gradle
+          sed -i -E 's/(id\("com.android.application"\)) version "[0-9.]+"/\1 version "8.9.1"/' "$SETTINGS"
+          sed -i -E 's/(id\("org.jetbrains.kotlin.android"\)) version "[0-9.]+"/\1 version "2.1.0"/' "$SETTINGS"
           # 指定 NDK 版本
-          if ! grep -q "ndkVersion" android/app/build.gradle; then
-            sed -i -E "s/(compileSdk = flutter.compileSdkVersion)/\1\n    ndkVersion = \"27.0.12077973\"/" android/app/build.gradle
+          if ! grep -q "ndkVersion" "$APP"; then
+            sed -i -E 's/(compileSdk = flutter.compileSdkVersion)/\1\n    ndkVersion = "27.0.12077973"/' "$APP"
           fi
-          echo "----- settings.gradle -----"; cat android/settings.gradle
-          echo "----- app/build.gradle -----"; cat android/app/build.gradle
+          echo "----- settings.gradle.kts -----"; cat "$SETTINGS"
+          echo "----- app/build.gradle.kts -----"; cat "$APP"
       - name: Install Android NDK 27
         run: sdkmanager --install "ndk;27.0.12077973"
       - run: flutter pub get
@@ -162,14 +165,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          # flutter_inappwebview_linux (6.2.0-beta) 需要 WPE WebKit
-          sudo apt-get install -y libwpewebkit-1.0-dev libwpebackend-fdo-1.0-dev || true
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
       - run: flutter create --project-name wechat_selkies_client --platforms=linux .
       - run: flutter pub get
+      - name: Disable inappwebview on Linux (使用系统浏览器回退，无需 WPE WebKit)
+        run: |
+          # Linux 端 supportsInAppWebView=false，不使用内置浏览器，
+          # 移除 flutter_inappwebview_linux 的原生注册以避免 WPE WebKit 依赖
+          REG=linux/flutter/generated_plugins.cmake
+          if [ -f "$REG" ]; then
+            sed -i '/flutter_inappwebview_linux/d' "$REG"
+            echo "----- generated_plugins.cmake -----"; cat "$REG"
+          fi
       - run: flutter build linux --release
       - name: Package Linux bundle
         run: |
