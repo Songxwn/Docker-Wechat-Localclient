@@ -22,10 +22,12 @@
 | iOS | ✅ | ✅ | `flutter_inappwebview` |
 | macOS | ✅ | ✅ | `flutter_inappwebview`（WKWebView） |
 | Web | ✅ | ✅ | 受浏览器同源策略限制，跨域鉴权可能需服务端配合 |
-| Windows | ➖ | ✅ | 桌面端 WebView 暂不支持，自动回退系统浏览器 |
-| Linux | ➖ | ✅ | 同上 |
+| Windows | ✅ | ✅ | `flutter_inappwebview_windows`（WebView2，需 WebView2 运行时） |
+| Linux | ➖ | ✅ | 暂无 endorsed 实现，自动回退系统浏览器 |
 
-> Windows / Linux 上连接时会自动使用系统默认浏览器打开 wechat-selkies 网页。
+> Windows 应用内浏览器基于 WebView2 运行时：Windows 11 已内置；Windows 10 通常随 Edge 一同安装。安装包会在缺失时自动静默安装 WebView2 运行时。
+>
+> Linux 上连接时会自动使用系统默认浏览器打开 wechat-selkies 网页。
 
 ## 项目结构
 

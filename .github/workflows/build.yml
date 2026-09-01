@@ -91,6 +91,10 @@ jobs:
           else
             echo "version=5.0.0" >> "$GITHUB_OUTPUT"
           fi
+      - name: Download WebView2 bootstrapper
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -UseBasicParsing -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "MicrosoftEdgeWebview2Setup.exe"
       - name: Build Windows installer (Inno Setup)
         shell: pwsh
         run: |

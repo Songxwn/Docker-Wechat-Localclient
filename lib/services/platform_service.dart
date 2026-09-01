@@ -7,16 +7,17 @@ class PlatformService {
 
   /// 当前平台是否支持应用内 WebView（flutter_inappwebview）。
   ///
-  /// flutter_inappwebview 支持 Android / iOS / macOS / Web。
-  /// Windows / Linux 桌面端目前不支持，需回退到系统浏览器。
+  /// flutter_inappwebview 支持 Android / iOS / macOS / Web，
+  /// 以及 Windows（通过 flutter_inappwebview_windows，基于 WebView2）。
+  /// Linux 桌面端暂无 endorsed 实现，需回退到系统浏览器。
   static bool get supportsInAppWebView {
     if (kIsWeb) return true;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
       case TargetPlatform.iOS:
       case TargetPlatform.macOS:
-        return true;
       case TargetPlatform.windows:
+        return true;
       case TargetPlatform.linux:
       case TargetPlatform.fuchsia:
         return false;

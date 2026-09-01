@@ -16,6 +16,8 @@ dependencies:
   uuid: ^4.4.0
   url_launcher: ^6.3.0
   flutter_inappwebview: ^6.1.5
+  # Windows 内置浏览器实现（WebView2），使 Windows 桌面端也用应用内浏览器
+  flutter_inappwebview_windows: ^0.6.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
