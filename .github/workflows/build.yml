@@ -82,10 +82,32 @@ jobs:
       - run: flutter create --project-name wechat_selkies_client --platforms=windows .
       - run: flutter pub get
       - run: flutter build windows --release
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=5.0.0" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & "$iscc" "/DAppVersion=${{ steps.ver.outputs.version }}" windows_installer.iss
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath WeChat-Selkies-Client-${{ steps.ver.outputs.version }}-windows-x64-portable.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: build/windows/x64/runner/Release
+          path: |
+            installer/*.exe
+            WeChat-Selkies-Client-*-windows-x64-portable.zip
 
   macos:
     runs-on: macos-latest
@@ -161,8 +183,9 @@ jobs:
           cp artifacts/macos-app/macos-app.zip release/WeChat-Selkies-macos.zip || true
           # Linux
           cp artifacts/linux-build/linux-x64.tar.gz release/WeChat-Selkies-linux-x64.tar.gz || true
-          # Windows (zip the folder)
-          cd artifacts/windows-build && zip -r ../../release/WeChat-Selkies-windows-x64.zip . && cd ../..
+          # Windows：安装包(.exe) + 便携版(.zip)
+          cp artifacts/windows-build/*.exe release/ || true
+          cp artifacts/windows-build/*-portable.zip release/ || true
           # Web (zip)
           cd artifacts/web-build && zip -r ../../release/WeChat-Selkies-web.zip . && cd ../..
           ls -la release

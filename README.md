@@ -88,9 +88,20 @@ Linux 构建依赖：
 sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
 ```
 
+### Windows 安装包
+
+CI 会在 `flutter build windows` 之后，使用 [Inno Setup](https://jrsoftware.org/isinfo.php)（脚本 `windows_installer.iss`）编译生成安装程序 `WeChat-Selkies-Client-<版本>-windows-x64-setup.exe`，同时保留便携版 ZIP。本地生成：
+
+```bash
+flutter build windows --release
+# 需安装 Inno Setup 6，然后：
+ISCC.exe /DAppVersion=5.0.0 windows_installer.iss
+# 安装包输出在 installer\ 目录
+```
+
 ## GitHub Actions 自动构建
 
-`.github/workflows/build.yml` 会在 push / PR / 打 tag 时并行构建 **Android、iOS（未签名）、Web、Windows、macOS、Linux**，产物上传为 Artifacts。工作流会先执行 `flutter create --platforms=<平台> .` 生成脚手架，再构建。
+`.github/workflows/build.yml` 会在 push / PR / 打 tag 时并行构建 **Android、iOS（未签名）、Web、Windows（安装包 + 便携版）、macOS、Linux**，产物上传为 Artifacts。工作流会先执行 `flutter create --platforms=<平台> .` 生成脚手架，再构建。
 
 ## 使用说明
 
