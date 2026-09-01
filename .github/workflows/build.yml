@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  FLUTTER_VERSION: "3.24.0"
+  FLUTTER_VERSION: "3.32.0"
 
 jobs:
   android:
@@ -95,6 +95,10 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
       - run: flutter create --project-name wechat_selkies_client --platforms=macos .
+      - name: Bump macOS deployment target to 10.14
+        run: |
+          sed -i '' "s/platform :osx, '[0-9.]*'/platform :osx, '10.14'/" macos/Podfile || true
+          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*/MACOSX_DEPLOYMENT_TARGET = 10.14/g' macos/Runner.xcodeproj/project.pbxproj || true
       - run: flutter pub get
       - run: flutter build macos --release
       - name: Zip .app
