@@ -24,7 +24,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=android .
+      - run: flutter create --project-name wechat_selkies_client --platforms=android .
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
@@ -40,7 +40,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=ios .
+      - run: flutter create --project-name wechat_selkies_client --platforms=ios .
       - run: flutter pub get
       - run: flutter build ios --release --no-codesign
       - name: Package unsigned .app
@@ -62,7 +62,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=web .
+      - run: flutter create --project-name wechat_selkies_client --platforms=web .
       - run: flutter pub get
       - run: flutter build web --release
       - uses: actions/upload-artifact@v4
@@ -78,7 +78,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=windows .
+      - run: flutter create --project-name wechat_selkies_client --platforms=windows .
       - run: flutter pub get
       - run: flutter build windows --release
       - uses: actions/upload-artifact@v4
@@ -94,7 +94,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=macos .
+      - run: flutter create --project-name wechat_selkies_client --platforms=macos .
       - run: flutter pub get
       - run: flutter build macos --release
       - name: Zip .app
@@ -118,10 +118,47 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-      - run: flutter create --platforms=linux .
+      - run: flutter create --project-name wechat_selkies_client --platforms=linux .
       - run: flutter pub get
       - run: flutter build linux --release
+      - name: Package Linux bundle
+        run: |
+          cd build/linux/x64/release/bundle
+          tar -czf ../../../../../linux-x64.tar.gz .
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: build/linux/x64/release/bundle
+          path: linux-x64.tar.gz
+
+  release:
+    needs: [android, ios, web, windows, macos, linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          # Android APK
+          find artifacts/android-apk -name '*.apk' -exec cp {} release/WeChat-Selkies-android.apk \; || true
+          # iOS unsigned
+          cp artifacts/ios-unsigned/ios-unsigned.ipa release/WeChat-Selkies-ios-unsigned.ipa || true
+          # macOS
+          cp artifacts/macos-app/macos-app.zip release/WeChat-Selkies-macos.zip || true
+          # Linux
+          cp artifacts/linux-build/linux-x64.tar.gz release/WeChat-Selkies-linux-x64.tar.gz || true
+          # Windows (zip the folder)
+          cd artifacts/windows-build && zip -r ../../release/WeChat-Selkies-windows-x64.zip . && cd ../..
+          # Web (zip)
+          cd artifacts/web-build && zip -r ../../release/WeChat-Selkies-web.zip . && cd ../..
+          ls -la release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
