@@ -33,14 +33,13 @@ jobs:
           # 升级 AGP 到 8.9.1（beta 依赖 androidx.browser:1.9.0 要求 >=8.9.1）
           sed -i -E 's/(id\("com.android.application"\)) version "[0-9.]+"/\1 version "8.9.1"/' "$SETTINGS"
           sed -i -E 's/(id\("org.jetbrains.kotlin.android"\)) version "[0-9.]+"/\1 version "2.1.0"/' "$SETTINGS"
-          # 指定 NDK 版本
+          # 固定 NDK 27（Gradle 会自动下载，无需 sdkmanager）
+          sed -i -E 's/ndkVersion = flutter.ndkVersion/ndkVersion = "27.0.12077973"/' "$APP"
           if ! grep -q "ndkVersion" "$APP"; then
             sed -i -E 's/(compileSdk = flutter.compileSdkVersion)/\1\n    ndkVersion = "27.0.12077973"/' "$APP"
           fi
           echo "----- settings.gradle.kts -----"; cat "$SETTINGS"
           echo "----- app/build.gradle.kts -----"; cat "$APP"
-      - name: Install Android NDK 27
-        run: sdkmanager --install "ndk;27.0.12077973"
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
@@ -171,15 +170,41 @@ jobs:
           channel: stable
       - run: flutter create --project-name wechat_selkies_client --platforms=linux .
       - run: flutter pub get
-      - name: Disable inappwebview on Linux (使用系统浏览器回退，无需 WPE WebKit)
+      - name: Stub flutter_inappwebview_linux (Linux 用系统浏览器回退，避开 WPE WebKit)
         run: |
-          # Linux 端 supportsInAppWebView=false，不使用内置浏览器，
-          # 移除 flutter_inappwebview_linux 的原生注册以避免 WPE WebKit 依赖
-          REG=linux/flutter/generated_plugins.cmake
-          if [ -f "$REG" ]; then
-            sed -i '/flutter_inappwebview_linux/d' "$REG"
-            echo "----- generated_plugins.cmake -----"; cat "$REG"
-          fi
+          # Ubuntu 24.04 已移除 WPE WebKit，且 Linux 端不使用内置浏览器
+          # (supportsInAppWebView=false)。将该插件的原生实现替换为最小 stub，
+          # 仅提供插件注册符号，保证链接通过。
+          PLUG=$(find ~/.pub-cache -type d -path '*flutter_inappwebview_linux*/linux' | head -n1)
+          echo "plugin linux dir: $PLUG"
+          # 备份并写入 stub CMakeLists
+          cat > "$PLUG/CMakeLists.txt" <<'EOF'
+          cmake_minimum_required(VERSION 3.10)
+          set(PROJECT_NAME "flutter_inappwebview_linux")
+          project(${PROJECT_NAME} LANGUAGES CXX C)
+          set(PLUGIN_NAME "flutter_inappwebview_linux_plugin")
+          set(CMAKE_CXX_STANDARD 17)
+          add_library(${PLUGIN_NAME} SHARED "stub_plugin.cc")
+          apply_standard_settings(${PLUGIN_NAME})
+          set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+          target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
+          target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+          target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
+          set(flutter_inappwebview_linux_bundled_libraries "" PARENT_SCOPE)
+          EOF
+          # 写入 stub 源码：空的插件注册函数
+          cat > "$PLUG/stub_plugin.cc" <<'EOF'
+          #include <flutter_linux/flutter_linux.h>
+          #ifdef FLUTTER_PLUGIN_EXPORT
+          #undef FLUTTER_PLUGIN_EXPORT
+          #endif
+          #define FLUTTER_PLUGIN_EXPORT __attribute__((visibility("default")))
+          extern "C" FLUTTER_PLUGIN_EXPORT void
+          flutter_inappwebview_linux_plugin_register_with_registrar(FlPluginRegistrar* registrar) {
+            (void)registrar;
+          }
+          EOF
+          echo "----- stub CMakeLists.txt -----"; cat "$PLUG/CMakeLists.txt"
       - run: flutter build linux --release
       - name: Package Linux bundle
         run: |
