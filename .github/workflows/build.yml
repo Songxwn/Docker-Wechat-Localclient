@@ -38,6 +38,8 @@ jobs:
           if ! grep -q "ndkVersion" "$APP"; then
             sed -i -E 's/(compileSdk = flutter.compileSdkVersion)/\1\n    ndkVersion = "27.0.12077973"/' "$APP"
           fi
+          # androidx.browser:1.9.0 要求 compileSdk >= 36
+          sed -i -E 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/' "$APP"
           echo "----- settings.gradle.kts -----"; cat "$SETTINGS"
           echo "----- app/build.gradle.kts -----"; cat "$APP"
       - run: flutter pub get
@@ -175,7 +177,8 @@ jobs:
           # Ubuntu 24.04 已移除 WPE WebKit，且 Linux 端不使用内置浏览器
           # (supportsInAppWebView=false)。将该插件的原生实现替换为最小 stub，
           # 仅提供插件注册符号，保证链接通过。
-          PLUG=$(find ~/.pub-cache -type d -path '*flutter_inappwebview_linux*/linux' | head -n1)
+          # 定位插件根目录的 linux 子目录（排除 example/）
+          PLUG=$(find ~/.pub-cache -type d -path '*flutter_inappwebview_linux*/linux' -not -path '*example*' | head -n1)
           echo "plugin linux dir: $PLUG"
           # 备份并写入 stub CMakeLists
           cat > "$PLUG/CMakeLists.txt" <<'EOF'
