@@ -187,9 +187,9 @@ jobs:
           cp artifacts/macos-app/macos-app.zip release/WeChat-Selkies-macos.zip || true
           # Linux
           cp artifacts/linux-build/linux-x64.tar.gz release/WeChat-Selkies-linux-x64.tar.gz || true
-          # Windows：安装包(.exe) + 便携版(.zip)
-          cp artifacts/windows-build/*.exe release/ || true
-          cp artifacts/windows-build/*-portable.zip release/ || true
+          # Windows：安装包(.exe) + 便携版(.zip)（artifact 可能保留 installer/ 子目录，递归查找）
+          find artifacts/windows-build -name '*setup*.exe' -exec cp {} release/ \; || true
+          find artifacts/windows-build -name '*-portable.zip' -exec cp {} release/ \; || true
           # Web (zip)
           cd artifacts/web-build && zip -r ../../release/WeChat-Selkies-web.zip . && cd ../..
           ls -la release
