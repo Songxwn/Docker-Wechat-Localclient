@@ -71,9 +71,10 @@ jobs:
           path: build/web
 
   windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -95,10 +96,14 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
       - run: flutter create --project-name wechat_selkies_client --platforms=macos .
-      - name: Bump macOS deployment target to 10.14
+      - name: Bump macOS deployment target to 10.15
         run: |
-          sed -i '' "s/platform :osx, '[0-9.]*'/platform :osx, '10.14'/" macos/Podfile || true
-          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*/MACOSX_DEPLOYMENT_TARGET = 10.14/g' macos/Runner.xcodeproj/project.pbxproj || true
+          sed -i '' "s/platform :osx, '[0-9.]*'/platform :osx, '10.15'/" macos/Podfile || true
+          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = [0-9.]*/MACOSX_DEPLOYMENT_TARGET = 10.15/g' macos/Runner.xcodeproj/project.pbxproj || true
+          # 在 flutter_additional_macos_build_settings(target) 行后插入强制部署目标，
+          # 修复 flutter_inappwebview_macos 需要 macOS 10.14+ 的编译错误
+          perl -0pi -e "s/(\s*flutter_additional_macos_build_settings\(target\)\n)/\$1    target.build_configurations.each do |config|\n      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'\n    end\n/" macos/Podfile
+          cat macos/Podfile
       - run: flutter pub get
       - run: flutter build macos --release
       - name: Zip .app
