@@ -28,6 +28,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
   late final TextEditingController _password;
   late bool _ignoreSsl;
   late bool _openExternal;
+  late bool _imeFix;
   bool _obscure = true;
 
   @override
@@ -40,6 +41,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
     _password = TextEditingController(text: c?.password ?? '');
     _ignoreSsl = c?.ignoreSsl ?? true;
     _openExternal = c?.openExternal ?? false;
+    _imeFix = c?.imeFix ?? true;
   }
 
   @override
@@ -61,6 +63,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
       password: _password.text,
       ignoreSsl: _ignoreSsl,
       openExternal: _openExternal,
+      imeFix: _imeFix,
     );
     Navigator.of(context).pop(result);
   }
@@ -141,6 +144,13 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
                   onChanged: PlatformService.supportsInAppWebView
                       ? (v) => setState(() => _openExternal = v)
                       : null,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('中文输入防吃字补丁'),
+                  subtitle: const Text('注入整段提交脚本（fork 自修，默认开启）'),
+                  value: _imeFix,
+                  onChanged: (v) => setState(() => _imeFix = v),
                 ),
               ],
             ),

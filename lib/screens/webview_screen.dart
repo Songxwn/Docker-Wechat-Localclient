@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../models/connection.dart';
@@ -20,8 +21,24 @@ class _WebViewScreenState extends State<WebViewScreen> {
   InAppWebViewController? _controller;
   double _progress = 0;
   bool _loading = true;
+  bool _imeInjected = false;
 
   Connection get conn => widget.connection;
+
+  /// 注入 IME 整段提交脚本（fork 自修：修复中文输入吃字）。
+  /// 脚本幂等（重复注入无副作用），每页注入一次。
+  Future<void> _injectImeFix() async {
+    final c = _controller;
+    if (c == null || _imeInjected || !conn.imeFix) return;
+    try {
+      final js = await rootBundle.loadString('assets/ime-inject.js');
+      await c.evaluateJavascript(source: js);
+      _imeInjected = true;
+      debugPrint('[IME] inject ok (${js.length} chars)');
+    } catch (e) {
+      debugPrint('[IME] inject failed: $e');
+    }
+  }
 
   String get _basicAuthHeader {
     final raw = '${conn.username.trim()}:${conn.password}';
@@ -87,6 +104,8 @@ class _WebViewScreenState extends State<WebViewScreen> {
       },
       onLoadStop: (controller, url) {
         setState(() => _loading = false);
+        _imeInjected = false;
+        _injectImeFix();
       },
       // 忽略 SSL 证书错误（仅当连接配置开启时）
       onReceivedServerTrustAuthRequest: (controller, challenge) async {

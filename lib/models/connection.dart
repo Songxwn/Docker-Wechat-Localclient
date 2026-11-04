@@ -14,6 +14,9 @@ class Connection {
   /// 是否使用系统默认浏览器打开（而非应用内 WebView）。
   final bool openExternal;
 
+  /// 是否注入 IME 整段提交脚本（修复中文输入吃字，默认开）。
+  final bool imeFix;
+
   /// 可选的 HTTP Basic 认证用户名。
   final String username;
 
@@ -26,6 +29,7 @@ class Connection {
     required this.url,
     this.ignoreSsl = true,
     this.openExternal = false,
+    this.imeFix = true,
     this.username = '',
     this.password = '',
   });
@@ -36,6 +40,7 @@ class Connection {
     String url = kDefaultUrl,
     bool ignoreSsl = true,
     bool openExternal = false,
+    bool imeFix = true,
     String username = '',
     String password = '',
   }) {
@@ -45,6 +50,7 @@ class Connection {
       url: url,
       ignoreSsl: ignoreSsl,
       openExternal: openExternal,
+      imeFix: imeFix,
       username: username,
       password: password,
     );
@@ -67,6 +73,7 @@ class Connection {
     String? url,
     bool? ignoreSsl,
     bool? openExternal,
+    bool? imeFix,
     String? username,
     String? password,
   }) {
@@ -76,6 +83,7 @@ class Connection {
       url: url ?? this.url,
       ignoreSsl: ignoreSsl ?? this.ignoreSsl,
       openExternal: openExternal ?? this.openExternal,
+      imeFix: imeFix ?? this.imeFix,
       username: username ?? this.username,
       password: password ?? this.password,
     );
@@ -87,6 +95,7 @@ class Connection {
         'url': url,
         'ignoreSsl': ignoreSsl,
         'openExternal': openExternal,
+        'imeFix': imeFix,
         'username': username,
         'password': password,
       };
@@ -98,6 +107,7 @@ class Connection {
       url: (json['url'] as String?) ?? kDefaultUrl,
       ignoreSsl: json['ignoreSsl'] != false,
       openExternal: json['openExternal'] == true,
+      imeFix: json['imeFix'] != false,
       username: (json['username'] as String?) ?? '',
       password: json['password'] == null ? '' : json['password'].toString(),
     );
