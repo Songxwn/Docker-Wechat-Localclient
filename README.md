@@ -6,7 +6,7 @@
 
 ## 功能
 
-- **多连接管理**：保存多个 wechat-selkies 连接（名称、地址、SSL / 浏览器选项、可选账号密码），支持添加、编辑、删除、设为默认
+- **链接前串流预设**：首页每条连接下直接展开设置分辨率、编码、帧率、码率、音视频开关等全部串流设置，改完即保存，连接时自动生效；打破“设置不匹配→不停重连→页内设置打不开”的死循环（默认全部跟随服务端，不动原有行为）。退出连接时页内修改自动同步回首页预设，下次连接沿用
 - **应用内 WebView**：在应用内直接打开网页版微信（Android / iOS / macOS / Web）
 - **系统浏览器打开**：可按连接配置使用系统默认浏览器打开（全平台，Windows / Linux 桌面默认使用此方式）
 - **忽略 SSL 证书错误**：适配 wechat-selkies 常见的自签名 HTTPS
@@ -35,16 +35,18 @@
 lib/
 ├── main.dart                     # 应用入口、主题、Provider 注入
 ├── models/
-│   └── connection.dart           # 连接数据模型 + 序列化
+│   └── connection.dart           # 连接数据模型 + 串流预设模型 + 序列化
 ├── services/
 │   ├── storage_service.dart      # shared_preferences 持久化
-│   └── platform_service.dart     # 平台能力检测 / 外部浏览器 / URL 规范化
+│   ├── platform_service.dart     # 平台能力检测 / 外部浏览器 / URL 规范化
+│   └── selkies_preset.dart       # 预设→Selkies localStorage 注入脚本生成
 ├── providers/
 │   └── connection_store.dart     # 连接状态管理（增删改 / 默认）
 └── screens/
-    ├── home_screen.dart          # 首页：连接列表 + 使用说明 + 页脚
+    ├── home_screen.dart          # 首页：连接列表（含串流预设直改）+ 使用说明 + 页脚
     ├── connection_form_dialog.dart  # 添加 / 编辑连接弹窗
-    └── webview_screen.dart       # 应用内 WebView（SSL 忽略 + Basic Auth）
+    ├── stream_preset_editor.dart # 串流预设编辑器（视频/音频/显示/输入/剪贴板）
+    └── webview_screen.dart       # 应用内 WebView（SSL 忽略 + Basic Auth + 预设注入）
 ```
 
 ## 环境要求
@@ -97,7 +99,7 @@ CI 会在 `flutter build windows` 之后，使用 [Inno Setup](https://jrsoftwar
 ```bash
 flutter build windows --release
 # 需安装 Inno Setup 6，然后：
-ISCC.exe /DAppVersion=5.0.0 windows_installer.iss
+ISCC.exe /DAppVersion=5.3.0 windows_installer.iss
 # 安装包输出在 installer\ 目录
 ```
 
@@ -111,6 +113,7 @@ ISCC.exe /DAppVersion=5.0.0 windows_installer.iss
 2. 启动本客户端，点击「添加连接」填写名称与服务地址，按需设置忽略 SSL、系统浏览器打开、账号密码，保存。
 3. 在列表中点击「连接」打开该 wechat-selkies 页面；可「编辑」「删除」或「设为默认」。
 4. 首次启动会自动创建默认连接「本地微信」（`https://localhost:3001`），可直接编辑或新增。
+5. 若连接后画面不停刷新/重连（多为分辨率、编码等设置与服务端不匹配）：断开回到首页 → 在该连接下展开「串流预设」→ 把可疑项改成与服务端一致的值（如手动分辨率 1280x720，改完即保存）→ 点「连接」重连。链接后仍可在 Selkies 页内继续调整，退出时页内修改会自动同步回首页预设
 
 ## 相关链接
 

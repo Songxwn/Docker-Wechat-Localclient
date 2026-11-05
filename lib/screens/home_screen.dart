@@ -6,6 +6,7 @@ import '../models/connection.dart';
 import '../providers/connection_store.dart';
 import '../services/platform_service.dart';
 import 'connection_form_dialog.dart';
+import 'stream_preset_editor.dart';
 import 'webview_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -13,7 +14,7 @@ class HomeScreen extends StatelessWidget {
 
   static const String _deployUrl = 'https://songxwn.com/cloud-wechat/';
   static const String _projectUrl = 'https://github.com/nickrunning/wechat-selkies';
-  static const String _appVersion = '5.0.0';
+  static const String _appVersion = '5.3.0';
 
   Future<void> _openConnection(BuildContext context, Connection conn) async {
     final platform = const PlatformService();
@@ -28,11 +29,30 @@ class HomeScreen extends StatelessWidget {
       return;
     }
     if (!context.mounted) return;
-    Navigator.of(context).push(
+    // WebView 退出时返回页内同步回的预设（无修改为 null），存回连接。
+    final synced = await Navigator.of(context).push<StreamPreset>(
       MaterialPageRoute(
         builder: (_) => WebViewScreen(connection: conn),
       ),
     );
+    if (!context.mounted) return;
+    if (synced != null) {
+      await context.read<ConnectionStore>().save(conn.copyWith(preset: synced));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('页内设置已同步到首页预设')),
+        );
+      }
+    } else if (context.mounted) {
+      // 诊断：无同步时说明原因（临时，定位断点用）。
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '未检测到页内修改（${WebViewScreen.lastSyncDiag}）'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   Future<void> _addOrEdit(BuildContext context, {Connection? existing}) async {
@@ -111,6 +131,8 @@ class HomeScreen extends StatelessWidget {
                                       _addOrEdit(context, existing: c),
                                   onSetDefault: () => store.setDefault(c.id),
                                   onDelete: () => _confirmDelete(context, c),
+                                  onPresetChanged: (p) =>
+                                      store.save(c.copyWith(preset: p)),
                                 ),
                             ],
                           ),
@@ -234,6 +256,7 @@ class _ConnectionTile extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSetDefault;
   final VoidCallback onDelete;
+  final ValueChanged<StreamPreset> onPresetChanged;
 
   const _ConnectionTile({
     required this.connection,
@@ -242,6 +265,7 @@ class _ConnectionTile extends StatelessWidget {
     required this.onEdit,
     required this.onSetDefault,
     required this.onDelete,
+    required this.onPresetChanged,
   });
 
   @override
@@ -319,6 +343,30 @@ class _ConnectionTile extends StatelessWidget {
                   foregroundColor: theme.colorScheme.error,
                 ),
                 child: const Text('删除'),
+              ),
+            ],
+          ),
+          // 链接前串流预设：首页直改即保存，无需进编辑弹窗。
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: Text(
+              '串流预设（链接前设置）',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            subtitle: Text(
+              connection.preset.hasExplicit ? '已自定义' : '全部跟随服务端',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+            initiallyExpanded: connection.preset.hasExplicit,
+            children: [
+              StreamPresetEditor(
+                key: ValueKey(connection.id),
+                initial: connection.preset,
+                onChanged: onPresetChanged,
               ),
             ],
           ),

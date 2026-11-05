@@ -4,6 +4,7 @@ import '../models/connection.dart';
 import '../services/platform_service.dart';
 
 /// 添加 / 编辑连接的弹窗。返回保存后的 Connection，取消返回 null。
+/// 注：串流预设不在此编辑，首页每条连接下直接展开修改（改完即保存）。
 class ConnectionFormDialog extends StatefulWidget {
   final Connection? existing;
 
