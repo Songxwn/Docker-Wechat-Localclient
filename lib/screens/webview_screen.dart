@@ -15,9 +15,6 @@ import '../services/selkies_preset.dart';
 class WebViewScreen extends StatefulWidget {
   final Connection connection;
 
-  /// 最近一次同步诊断（临时，定位断点用）。
-  static String lastSyncDiag = '未执行';
-
   const WebViewScreen({super.key, required this.connection});
 
   @override
@@ -49,14 +46,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
   /// 退出前回读页内修改并合并进预设；失败/无修改返回 null。
   Future<StreamPreset?> _syncBackPreset() async {
     final c = _controller;
-    if (c == null) {
-      WebViewScreen.lastSyncDiag = 'controller 为空';
-      return null;
-    }
-    if (_syncing) {
-      WebViewScreen.lastSyncDiag = '同步重入被拦';
-      return null;
-    }
+    if (c == null || _syncing) return null;
     _syncing = true;
     try {
       // Selkies dashboard 的滑杆/下拉经 500ms 防抖才 post 给 core 落盘
@@ -81,18 +71,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
       } else {
         decoded = null;
       }
-      if (decoded == null) {
-        WebViewScreen.lastSyncDiag =
-            '回读解析失败（raw 类型 ${raw.runtimeType}）';
-        return null;
-      }
+      if (decoded == null) return null;
       final keysRaw = decoded['keys'];
       final pipesRaw = decoded['pipes'];
       final touchedRaw = decoded['touched'];
-      if (keysRaw is! Map || touchedRaw is! List) {
-        WebViewScreen.lastSyncDiag = '回读结构异常';
-        return null;
-      }
+      if (keysRaw is! Map || touchedRaw is! List) return null;
       final keys = <String, String>{};
       for (final e in keysRaw.entries) {
         if (e.key is String && e.value is String) {
@@ -109,12 +92,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
       }
       final touched =
           touchedRaw.whereType<String>().toSet();
-      if (touched.isEmpty) {
-        WebViewScreen.lastSyncDiag = '追踪标记为空（tracker 未抓到修改）';
-        return null;
-      }
-      WebViewScreen.lastSyncDiag =
-          'touched=${touched.join(',')} keys=${keys.keys.join(',')}';
+      if (touched.isEmpty) return null;
       return SelkiesPresetScript.mergeReadback(
         conn.preset,
         keys: keys,
@@ -123,7 +101,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
       );
     } catch (e) {
       debugPrint('[preset] sync-back failed: $e');
-      WebViewScreen.lastSyncDiag = '异常：$e';
       return null;
     } finally {
       _syncing = false;
@@ -145,57 +122,6 @@ class _WebViewScreenState extends State<WebViewScreen> {
     } finally {
       _popping = false;
     }
-  }
-
-  /// 诊断：dump 页面 localStorage 全键（临时，定位同步断点用）。
-  Future<void> _dumpStorage() async {
-    final c = _controller;
-    if (c == null || !mounted) return;
-    const src = '''
-(function(){
-try{
-var o={};
-for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);o[k]=localStorage.getItem(k);}
-var keys=Object.keys(o).sort();
-var ns1=(window.location.origin+window.location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_');
-var ns2=window.location.href.split('#')[0].replace(/[^a-zA-Z0-9.-_]/g,'_');
-var fr={};
-try{fr.ns1=localStorage.getItem(ns1+'_framerate');}catch(e){}
-try{fr.ns2=localStorage.getItem(ns2+'_framerate');}catch(e){}
-try{fr.tk1=localStorage.getItem(ns1+'___selkies_touched');}catch(e){}
-try{fr.tk2=localStorage.getItem(ns2+'___selkies_touched');}catch(e){}
-return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,count:keys.length,vals:o});
-}catch(e){return JSON.stringify({error:String(e)});}
-})();
-''';
-    dynamic raw;
-    try {
-      raw = await c.evaluateJavascript(source: src);
-    } catch (e) {
-      raw = 'EVAL-ERROR: $e';
-    }
-    if (!mounted) return;
-    final text = raw is Map
-        ? const JsonEncoder.withIndent('  ').convert(raw)
-        : raw.toString();
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('localStorage 诊断'),
-        content: SizedBox(
-          width: 500,
-          height: 400,
-          child: SingleChildScrollView(child: SelectableText(text)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-    debugPrint('[preset] storage dump: $text');
   }
 
   /// 注入 IME 整段提交脚本（fork 自修：修复中文输入吃字）。
@@ -239,11 +165,6 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
             onPressed: _popWithSync,
           ),
           actions: [
-            IconButton(
-              tooltip: '存储诊断',
-              icon: const Icon(Icons.bug_report),
-              onPressed: _dumpStorage,
-            ),
             IconButton(
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),

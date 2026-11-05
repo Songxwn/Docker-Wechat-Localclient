@@ -43,15 +43,6 @@ class HomeScreen extends StatelessWidget {
           const SnackBar(content: Text('页内设置已同步到首页预设')),
         );
       }
-    } else if (context.mounted) {
-      // 诊断：无同步时说明原因（临时，定位断点用）。
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              '未检测到页内修改（${WebViewScreen.lastSyncDiag}）'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
     }
   }
 
