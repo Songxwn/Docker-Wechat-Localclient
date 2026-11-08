@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 /// 平台能力检测与外部浏览器打开。
@@ -29,6 +30,24 @@ class PlatformService {
     return defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.linux ||
         defaultTargetPlatform == TargetPlatform.macOS;
+  }
+
+  /// 探测 FileBrowser 地址是否可达（HTTP 状态 < 400 即视为在线）。
+  ///
+  /// 连接页据此决定文件管理按钮的显隐：未配置或探不通一律不显示，
+  /// 避免跳到一个死地址。网络异常/超时/解析失败都算不可达。
+  static Future<bool> isFileBrowserReachable(String url,
+      {Duration timeout = const Duration(seconds: 4)}) async {
+    final s = url.trim();
+    if (s.isEmpty) return false;
+    final uri = Uri.tryParse(normalizeUrl(s));
+    if (uri == null) return false;
+    try {
+      final resp = await http.get(uri).timeout(timeout);
+      return resp.statusCode < 400;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// 使用系统默认浏览器打开链接。

@@ -38,6 +38,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   late final UserScript _clipboardSocketHook;
   bool _syncing = false;
   bool _pulling = false;
+  bool _fileBrowserReachable = false;
   DateTime? _lastAutoImageAt;
   DateTime? _suppressAutoImageUntil;
   String? _lastAutoImageSig;
@@ -49,6 +50,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _probeFileBrowser();
     // 追踪脚本常驻：记录页内用户意图修改的键，供退出时回读。
     _trackerScript = UserScript(
       source: SelkiesPresetScript.trackerScript(),
@@ -328,14 +330,16 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
     }
   }
 
+  /// 探测 FileBrowser 地址；可达才显示文件管理按钮。
+  Future<void> _probeFileBrowser() async {
+    final ok = await PlatformService.isFileBrowserReachable(conn.fileBrowserUrl);
+    if (!mounted) return;
+    setState(() => _fileBrowserReachable = ok);
+  }
+
   /// 在系统默认浏览器打开该连接配置的 FileBrowser（文件管理）。
   Future<void> _openFileBrowserExternal() async {
-    final url = conn.fileBrowserUrl.trim();
-    if (url.isEmpty) {
-      _showSnack('未配置 FileBrowser 地址：回首页编辑该连接填写（如 https://nas:13085）');
-      return;
-    }
-    final ok = await const PlatformService().openExternal(normalizeUrl(url));
+    final ok = await const PlatformService().openExternal(normalizeUrl(conn.fileBrowserUrl));
     if (!ok) _showSnack('无法打开系统浏览器');
   }
 
@@ -542,11 +546,12 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
               icon: const Icon(Icons.content_paste),
               onPressed: _pushLocalClipboard,
             ),
-            IconButton(
-              tooltip: '在系统浏览器打开 FileBrowser（文件管理/批量下载删除）',
-              icon: const Icon(Icons.folder_open),
-              onPressed: _openFileBrowserExternal,
-            ),
+            if (_fileBrowserReachable)
+              IconButton(
+                tooltip: '在系统浏览器打开 FileBrowser（文件管理/批量下载删除）',
+                icon: const Icon(Icons.folder_open),
+                onPressed: _openFileBrowserExternal,
+              ),
             IconButton(
               tooltip: '存储诊断',
               icon: const Icon(Icons.bug_report),

@@ -9,7 +9,7 @@
 - **链接前串流预设**：首页每条连接下直接展开设置分辨率、编码、帧率、码率、音视频开关等全部串流设置，改完即保存，连接时自动生效；打破“设置不匹配→不停重连→页内设置打不开”的死循环（默认全部跟随服务端，不动原有行为）。退出连接时页内修改自动同步回首页预设，下次连接沿用；连接页标题栏 🐞 按钮可查看存储诊断，排查预设未生效
 - **应用内 WebView**：在应用内直接打开网页版微信（Android / iOS / macOS / Web）
 - **剪贴板双向同步**：连接页标题栏剪贴板按钮读取本机文本或图片（图片经 `pasteboard` 转 PNG，上限 16 MB），文本走 Selkies `clipboardUpdateFromUI`，图片走 `cb,<mime>,<base64>` 直接写入远端剪贴板；反向由页面 hook 捕获服务端 `clipboard,` / `clipboard_binary,` / 分片消息，经 `callHandler` 写回本机剪贴板（macOS 原生通道直写原始 PNG/JPEG 字节，避免 TIFF 膨胀；文本总可用，图片需开启二进制剪贴板）。不依赖浏览器 `clipboard-read` 权限，WKWebView / Safari 下也能用。另有「拉取」按钮（复制图标）主动向服务端发 Selkies `cr` 读取请求把远端剪贴板取回本机，大图分片传输时显示进度条，被动推送未生效时手动触发；超时未收到新帧则回退最近一次收到的缓存
-- **远端文件批量管理**：由部署侧 [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) 侧车承担（挂同一 `wechat` 数据卷），客户端不内置文件面板；连接可配置 FileBrowser 地址，连接页标题栏文件夹按钮一键跳系统浏览器；上游 Selkies file-manager API 无 delete 端点，删除（永久）类操作集中在 filebrowser
+- **远端文件批量管理**：由部署侧 [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) 侧车承担（挂同一 `wechat` 数据卷），客户端不内置文件面板；连接可配置 FileBrowser 地址，连接页标题栏文件夹按钮一键跳系统浏览器（已配置且探测可达才显示该按钮）；上游 Selkies file-manager API 无 delete 端点，删除（永久）类操作集中在 filebrowser
 - **系统浏览器打开**：可按连接配置使用系统默认浏览器打开（全平台，Windows / Linux 桌面默认使用此方式）
 - **忽略 SSL 证书错误**：适配 wechat-selkies 常见的自签名 HTTPS
 - **HTTP Basic 认证**：连接时可配置用户名 / 密码，自动完成鉴权（适用于 wechat-selkies 配置了 PASSWORD 等鉴权时）

@@ -1,7 +1,7 @@
 name: wechat_selkies_client
 description: WeChat Selkies 本地远程客户端 (Flutter 全平台版)
 publish_to: "none"
-version: 5.5.0+1
+version: 5.5.1+1
 
 environment:
   # flutter_inappwebview 6.2.0-beta.x 要求 Dart ^3.8.0 / Flutter >=3.32.0
@@ -23,6 +23,8 @@ dependencies:
   flutter_inappwebview: ^6.2.0-beta.3
   # Windows 内置浏览器实现（WebView2）
   flutter_inappwebview_windows: ^0.7.0-beta.3
+  # FileBrowser 地址可达性探测（连接页按钮显隐）
+  http: ^1.4.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
