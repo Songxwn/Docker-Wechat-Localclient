@@ -2,10 +2,12 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../models/connection.dart';
+import '../services/clipboard_bridge.dart';
 import '../services/selkies_preset.dart';
 
 /// 应用内 WebView 页面：加载 wechat-selkies 网页版微信。
@@ -24,26 +26,100 @@ class WebViewScreen extends StatefulWidget {
   State<WebViewScreen> createState() => _WebViewScreenState();
 }
 
-class _WebViewScreenState extends State<WebViewScreen> {
+class _WebViewScreenState extends State<WebViewScreen>
+    with WidgetsBindingObserver {
   InAppWebViewController? _controller;
   double _progress = 0;
   bool _loading = true;
   bool _imeInjected = false;
   UserScript? _presetScript;
   late final UserScript _trackerScript;
+  late final UserScript _clipboardSocketHook;
   bool _syncing = false;
+  bool _pulling = false;
+  DateTime? _lastAutoImageAt;
+  DateTime? _suppressAutoImageUntil;
+  String? _lastAutoImageSig;
+  static bool _clipboardHintShown = false;
 
   Connection get conn => widget.connection;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 追踪脚本常驻：记录页内用户意图修改的键，供退出时回读。
     _trackerScript = UserScript(
       source: SelkiesPresetScript.trackerScript(),
       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
       forMainFrameOnly: true,
     );
+    // 图片剪贴板需要直接向 Selkies 数据 socket 发 cb 协议；
+    // 在页面创建 WebSocket 前挂观察器，暴露 __selkiesSocket。
+    _clipboardSocketHook = UserScript(
+      source: clipboardSocketHookScript(),
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      forMainFrameOnly: true,
+    );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 用户从其它应用复制图片后切回客户端：自动把图片推到远端。
+    if (state == AppLifecycleState.resumed) {
+      _autoPushClipboardImage();
+    }
+  }
+
+  /// 自动同步图片；文本不自动推，避免覆盖远端剪贴板。
+  Future<void> _autoPushClipboardImage() async {
+    final c = _controller;
+    if (c == null || !mounted) return;
+    final now = DateTime.now();
+    if (_suppressAutoImageUntil != null &&
+        now.isBefore(_suppressAutoImageUntil!)) {
+      return;
+    }
+    if (_lastAutoImageAt != null &&
+        now.difference(_lastAutoImageAt!).inMilliseconds < 1200) {
+      return;
+    }
+    _lastAutoImageAt = now;
+
+    ClipboardImage? image;
+    try {
+      image = await readClipboardImage();
+    } catch (e) {
+      debugPrint('[clipboard] auto image read failed: $e');
+      return;
+    }
+    if (image == null) return;
+    final sig = _imageSignature(image);
+    if (sig == _lastAutoImageSig) return;
+    try {
+      await pushClipboardImageToRemote(
+        image: image,
+        evaluateJavascript: (source) => c.evaluateJavascript(source: source),
+      );
+      _lastAutoImageSig = sig;
+      debugPrint('[clipboard] auto pushed image ${image.bytes.length} bytes');
+      _showSnack('已自动同步图片（${_formatBytes(image.bytes.length)}）到远端剪贴板');
+    } catch (e) {
+      debugPrint('[clipboard] auto image push failed: $e');
+    }
+  }
+
+  String _imageSignature(ClipboardImage image) {
+    final b = image.bytes;
+    final head = b.isEmpty ? 0 : b.first;
+    final tail = b.isEmpty ? 0 : b.last;
+    return '${b.length}:$head:$tail';
   }
 
   /// 退出前回读页内修改并合并进预设；失败/无修改返回 null。
@@ -199,6 +275,210 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
     debugPrint('[preset] storage dump: $text');
   }
 
+  /// 服务端剪贴板消息经页面 hook 转发到 Flutter，写回本机剪贴板。
+  void _registerRemoteClipboardHandlers(InAppWebViewController controller) {
+    try {
+      controller.addJavaScriptHandler(
+        handlerName: kClipboardTextHandler,
+        callback: (args) async {
+          final text = args.isNotEmpty ? (args.first?.toString() ?? '') : '';
+          if (text.isEmpty) return null;
+          try {
+            await Clipboard.setData(ClipboardData(text: text));
+            debugPrint('[clipboard] remote text -> local ${text.length} chars');
+          } catch (e) {
+            debugPrint('[clipboard] write remote text failed: $e');
+          }
+          return null;
+        },
+      );
+      controller.addJavaScriptHandler(
+        handlerName: kClipboardImageHandler,
+        callback: (args) async {
+          if (args.length < 2) return null;
+          final mime = args[0]?.toString() ?? 'image/png';
+          final b64 = args[1]?.toString() ?? '';
+          if (b64.isEmpty) return null;
+          try {
+            final bytes = base64Decode(b64);
+            if (bytes.length > kMaxPullClipboardImageBytes) {
+              debugPrint('[clipboard] remote image too large: ${bytes.length}');
+              return null;
+            }
+            await writeClipboardImage(bytes, mimeType: mime);
+            _suppressAutoImageUntil =
+                DateTime.now().add(const Duration(seconds: 8));
+            try {
+              final local = await readClipboardImage();
+              if (local != null) {
+                _lastAutoImageSig = _imageSignature(local);
+              }
+            } catch (_) {}
+            debugPrint(
+                '[clipboard] remote image -> local ${bytes.length} bytes $mime');
+          } catch (e) {
+            debugPrint('[clipboard] write remote image failed: $e');
+          }
+          return null;
+        },
+      );
+    } catch (e) {
+      debugPrint('[clipboard] register handlers failed: $e');
+    }
+  }
+
+  /// 主动拉取远端剪贴板到本机（发 Selkies `cr` 帧请求）。
+  ///
+  /// 与被动 hook 的区别：hook 只在服务端剪贴板变化时推送；按钮随叫随到，
+  /// 大图分片传输时显示进度条，且超时还能回退最近一次收到的缓存。
+  Future<void> _pullRemoteClipboard() async {
+    final c = _controller;
+    if (c == null) {
+      _showSnack('页面尚未加载完成');
+      return;
+    }
+    if (_pulling) return;
+    _pulling = true;
+    final messenger = ScaffoldMessenger.of(context);
+    // 进度条 SnackBar：null = 传输未开始（不定态），有进度显示百分比。
+    final progress = ValueNotifier<double?>(null);
+    try {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            duration: const Duration(minutes: 5),
+            content: ValueListenableBuilder<double?>(
+              valueListenable: progress,
+              builder: (_, value, __) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value == null
+                      ? '正在拉取远端剪贴板…'
+                      : '正在拉取图片… ${(value * 100).toStringAsFixed(0)}%'),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(value: value, minHeight: 3),
+                ],
+              ),
+            ),
+          ),
+        );
+      final snap = await pullRemoteClipboard(
+        evaluateJavascript: (source) => c.evaluateJavascript(source: source),
+        onProgress: (received, total) {
+          if (total > 0) progress.value = received / total;
+        },
+      );
+      if (!mounted) return;
+      if (snap == null) {
+        _showSnack('远端未返回剪贴板内容（服务端可能未开启剪贴板同步）');
+        return;
+      }
+      if (snap.imageBytes != null) {
+        final mime = snap.imageMime ?? 'image/png';
+        await writeClipboardImage(snap.imageBytes!, mimeType: mime);
+        // 防止切回窗口时把刚拉下来的图片又自动推回远端。
+        _suppressAutoImageUntil = DateTime.now().add(const Duration(seconds: 8));
+        _lastAutoImageSig = _imageSignature(ClipboardImage(mime, snap.imageBytes!));
+        final mimeShort = mime.replaceAll('image/', '');
+        _showSnack(snap.fresh
+            ? '已拉取图片（$mimeShort，${_formatBytes(snap.imageBytes!.length)}）到本机剪贴板'
+            : '已恢复最近收到的图片（$mimeShort，${_formatBytes(snap.imageBytes!.length)}）');
+      } else {
+        final text = snap.text ?? '';
+        await Clipboard.setData(ClipboardData(text: text));
+        _showSnack(snap.fresh
+            ? '已拉取 ${text.length} 个字符到本机剪贴板'
+            : '已恢复最近收到的文本（${text.length} 个字符）');
+      }
+    } catch (e) {
+      _showSnack('拉取失败：$e');
+    } finally {
+      _pulling = false;
+      progress.dispose();
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      } else {
+        messenger.hideCurrentSnackBar();
+      }
+    }
+  }
+
+  /// 读取本机剪贴板并注入 Selkies：图片优先，其次文本。
+  /// 绕过浏览器 Clipboard API：WKWebView/未授权浏览器无法在 focus 时读剪贴板。
+  Future<void> _pushLocalClipboard() async {
+    final c = _controller;
+    if (c == null) {
+      _showSnack('页面尚未加载完成');
+      return;
+    }
+
+    ClipboardImage? image;
+    try {
+      image = await readClipboardImage();
+    } catch (e) {
+      _showSnack('读取本机图片失败：$e');
+    }
+    if (image != null) {
+      try {
+        await pushClipboardImageToRemote(
+          image: image,
+          evaluateJavascript: (source) =>
+              c.evaluateJavascript(source: source),
+        );
+        _lastAutoImageSig = _imageSignature(image);
+        debugPrint('[clipboard] pushed image ${image.bytes.length} bytes');
+        _showSnack('已同步图片（${_formatBytes(image.bytes.length)}）到远端剪贴板');
+      } catch (e) {
+        debugPrint('[clipboard] image push failed: $e');
+        _showSnack('同步图片失败：$e');
+      }
+      return;
+    }
+
+    ClipboardData? data;
+    try {
+      data = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (e) {
+      _showSnack('读取本机剪贴板失败：$e');
+      return;
+    }
+    final text = data?.text ?? '';
+    if (text.isEmpty) {
+      _showSnack('本机剪贴板没有可同步的图片或文本（Finder 复制文件请先打开图片再复制内容）');
+      return;
+    }
+    try {
+      await pushClipboardToRemote(
+        text: text,
+        evaluateJavascript: (source) => c.evaluateJavascript(source: source),
+      );
+      debugPrint('[clipboard] pushed ${text.length} chars to remote');
+      _showSnack('已同步 ${text.length} 个字符到远端剪贴板');
+    } catch (e) {
+      debugPrint('[clipboard] push failed: $e');
+      _showSnack('同步失败：$e');
+    }
+  }
+
+  String _formatBytes(int bytes) => bytes >= 1024 * 1024
+      ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+      : '${(bytes / 1024).round()} KB';
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   /// 注入 IME 整段提交脚本（fork 自修：修复中文输入吃字）。
   Future<void> _injectImeFix() async {
     final c = _controller;
@@ -241,6 +521,16 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
           ),
           actions: [
             IconButton(
+              tooltip: '拉取远端剪贴板到本机',
+              icon: const Icon(Icons.content_copy),
+              onPressed: _pullRemoteClipboard,
+            ),
+            IconButton(
+              tooltip: '同步本机剪贴板（文本/图片）到远端',
+              icon: const Icon(Icons.content_paste),
+              onPressed: _pushLocalClipboard,
+            ),
+            IconButton(
               tooltip: '存储诊断',
               icon: const Icon(Icons.bug_report),
               onPressed: _dumpStorage,
@@ -279,9 +569,11 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
             forMainFrameOnly: true,
           );
-    final scripts = _presetScript == null
-        ? [_trackerScript]
-        : [_presetScript!, _trackerScript];
+    final scripts = <UserScript>[
+      _clipboardSocketHook,
+      if (_presetScript != null) _presetScript!,
+      _trackerScript,
+    ];
     return InAppWebView(
       initialUrlRequest: URLRequest(
         url: WebUri(conn.url),
@@ -301,7 +593,10 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
         allowUniversalAccessFromFileURLs: true,
       ),
       initialUserScripts: UnmodifiableListView(scripts),
-      onWebViewCreated: (controller) => _controller = controller,
+      onWebViewCreated: (controller) {
+        _controller = controller;
+        _registerRemoteClipboardHandlers(controller);
+      },
       onProgressChanged: (controller, progress) {
         setState(() => _progress = progress / 100.0);
       },
@@ -312,6 +607,10 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
         setState(() => _loading = false);
         _imeInjected = false;
         _injectImeFix();
+        if (!_clipboardHintShown) {
+          _clipboardHintShown = true;
+          _showSnack('右上角按钮双向同步剪贴板：粘贴=本机→远端，复制=远端→本机');
+        }
       },
       // 忽略 SSL 证书错误（仅当连接配置开启时）
       onReceivedServerTrustAuthRequest: (controller, challenge) async {
