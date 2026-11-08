@@ -643,6 +643,9 @@ class Connection {
   /// 可选的 HTTP Basic 认证密码。
   final String password;
 
+  /// 可选的 FileBrowser 文件管理地址（连接页标题栏按钮跳系统浏览器）。
+  final String fileBrowserUrl;
+
   /// 串流预设（链接前设置，默认全跟随服务端）。
   final StreamPreset preset;
 
@@ -655,6 +658,7 @@ class Connection {
     this.imeFix = true,
     this.username = '',
     this.password = '',
+    this.fileBrowserUrl = '',
     this.preset = const StreamPreset(),
   });
 
@@ -667,6 +671,7 @@ class Connection {
     bool imeFix = true,
     String username = '',
     String password = '',
+    String fileBrowserUrl = '',
     StreamPreset preset = const StreamPreset(),
   }) {
     return Connection(
@@ -678,6 +683,7 @@ class Connection {
       imeFix: imeFix,
       username: username,
       password: password,
+      fileBrowserUrl: fileBrowserUrl,
       preset: preset,
     );
   }
@@ -702,6 +708,7 @@ class Connection {
     bool? imeFix,
     String? username,
     String? password,
+    String? fileBrowserUrl,
     StreamPreset? preset,
   }) {
     return Connection(
@@ -713,6 +720,7 @@ class Connection {
       imeFix: imeFix ?? this.imeFix,
       username: username ?? this.username,
       password: password ?? this.password,
+      fileBrowserUrl: fileBrowserUrl ?? this.fileBrowserUrl,
       preset: preset ?? this.preset,
     );
   }
@@ -726,6 +734,7 @@ class Connection {
         'imeFix': imeFix,
         'username': username,
         'password': password,
+        'fileBrowserUrl': fileBrowserUrl,
         'preset': preset.toJson(),
       };
 
@@ -740,6 +749,7 @@ class Connection {
       imeFix: json['imeFix'] != false,
       username: (json['username'] as String?) ?? '',
       password: json['password'] == null ? '' : json['password'].toString(),
+      fileBrowserUrl: (json['fileBrowserUrl'] as String?) ?? '',
       preset: p is Map
           ? StreamPreset.fromJson(Map<String, dynamic>.from(p))
           : const StreamPreset(),

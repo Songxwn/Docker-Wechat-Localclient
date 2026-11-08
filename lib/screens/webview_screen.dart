@@ -8,6 +8,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../models/connection.dart';
 import '../services/clipboard_bridge.dart';
+import '../services/platform_service.dart';
 import '../services/selkies_preset.dart';
 
 /// 应用内 WebView 页面：加载 wechat-selkies 网页版微信。
@@ -327,6 +328,17 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
     }
   }
 
+  /// 在系统默认浏览器打开该连接配置的 FileBrowser（文件管理）。
+  Future<void> _openFileBrowserExternal() async {
+    final url = conn.fileBrowserUrl.trim();
+    if (url.isEmpty) {
+      _showSnack('未配置 FileBrowser 地址：回首页编辑该连接填写（如 https://nas:13085）');
+      return;
+    }
+    final ok = await const PlatformService().openExternal(normalizeUrl(url));
+    if (!ok) _showSnack('无法打开系统浏览器');
+  }
+
   /// 主动拉取远端剪贴板到本机（发 Selkies `cr` 帧请求）。
   ///
   /// 与被动 hook 的区别：hook 只在服务端剪贴板变化时推送；按钮随叫随到，
@@ -529,6 +541,11 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
               tooltip: '同步本机剪贴板（文本/图片）到远端',
               icon: const Icon(Icons.content_paste),
               onPressed: _pushLocalClipboard,
+            ),
+            IconButton(
+              tooltip: '在系统浏览器打开 FileBrowser（文件管理/批量下载删除）',
+              icon: const Icon(Icons.folder_open),
+              onPressed: _openFileBrowserExternal,
             ),
             IconButton(
               tooltip: '存储诊断',

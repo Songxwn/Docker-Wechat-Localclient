@@ -27,6 +27,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
   late final TextEditingController _url;
   late final TextEditingController _username;
   late final TextEditingController _password;
+  late final TextEditingController _fileBrowserUrl;
   late bool _ignoreSsl;
   late bool _openExternal;
   late bool _imeFix;
@@ -40,6 +41,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
     _url = TextEditingController(text: c?.url ?? kDefaultUrl);
     _username = TextEditingController(text: c?.username ?? '');
     _password = TextEditingController(text: c?.password ?? '');
+    _fileBrowserUrl = TextEditingController(text: c?.fileBrowserUrl ?? '');
     _ignoreSsl = c?.ignoreSsl ?? true;
     _openExternal = c?.openExternal ?? false;
     _imeFix = c?.imeFix ?? true;
@@ -51,6 +53,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
     _url.dispose();
     _username.dispose();
     _password.dispose();
+    _fileBrowserUrl.dispose();
     super.dispose();
   }
 
@@ -62,6 +65,7 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
       url: normalizeUrl(_url.text).isEmpty ? kDefaultUrl : normalizeUrl(_url.text),
       username: _username.text.trim(),
       password: _password.text,
+      fileBrowserUrl: normalizeUrl(_fileBrowserUrl.text),
       ignoreSsl: _ignoreSsl,
       openExternal: _openExternal,
       imeFix: _imeFix,
@@ -127,6 +131,17 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _fileBrowserUrl,
+                  decoration: const InputDecoration(
+                    labelText: 'FileBrowser 地址（可选）',
+                    hintText: 'https://nas:13085',
+                    helperText: '连接页标题栏文件管理按钮跳转目标，留空则按钮提示未配置',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
