@@ -7,8 +7,8 @@
 - [ ] 上游 PR #2(Songxwn/Docker-Wechat-Localclient)合并 → 切回上游主线,retire fork 内 IME/剪贴板补丁(跟踪2/3/5);issue #3 随合并自动关闭
 - [ ] 推送图片 >16 MB:走服务端分片上传 verbs(`cbs/cbd/cbe`,协议已核实未实现)——有实际大图需求再做
 - [ ] filebrowser 上游已归档(2026-09-01 起 no fix):出现可靠社区续作镜像时评估替换(卷结构兼容,只换 image)
-- [ ] 思源笔记「客户端装法」命令随每次发版更新资产链接(当前 v5.5.0 / `WeChat-Selkies-macos.zip`)
-- [ ] v5.5.0 FileBrowser 地址字段在表单填写后跳转验证(本地已实测按钮出现,跳转待人工点一下)
+- [ ] 思源笔记「客户端装法」命令随每次发版更新资产链接(当前 v5.5.1 / `WeChat-Selkies-macos.zip`)
+- [x] v5.5.0/v5.5.1 FileBrowser 地址:表单填写→按钮显隐(配置+可达探测)→跳转,本地实测通过
 
 ## 待人工验证
 
