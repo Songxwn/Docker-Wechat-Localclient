@@ -646,6 +646,13 @@ class Connection {
   /// 可选的 FileBrowser 文件管理地址（连接页标题栏按钮跳系统浏览器）。
   final String fileBrowserUrl;
 
+  /// 服务端最大分辨率（`'宽x高'`，如 `'1280x720'`；空串 = 默认 1280x720）。
+  ///
+  /// 页面跟随窗口发出的 `r,<宽>x<高>` 分辨率请求若超此上限，注入脚本会
+  /// 等比缩小后再放行——服务端 MAX_RES 钉死时，超限请求会导致串流管线
+  /// 反复重建失败、WS 断连循环（2026-11-09 最大化窗口断连根因）。
+  final String maxResolution;
+
   /// 串流预设（链接前设置，默认全跟随服务端）。
   final StreamPreset preset;
 
@@ -659,8 +666,21 @@ class Connection {
     this.username = '',
     this.password = '',
     this.fileBrowserUrl = '',
+    this.maxResolution = '',
     this.preset = const StreamPreset(),
   });
+
+  /// 解析 [maxResolution] 为 `(宽, 高)`；空/格式非法/非正数兜底 `(1280, 720)`。
+  static final RegExp _maxResRe = RegExp(r'^(\d+)x(\d+)$');
+
+  (int, int) get maxResolutionWH {
+    final m = _maxResRe.firstMatch(maxResolution.trim());
+    if (m == null) return (1280, 720);
+    final w = int.tryParse(m.group(1)!);
+    final h = int.tryParse(m.group(2)!);
+    if (w == null || h == null || w <= 0 || h <= 0) return (1280, 720);
+    return (w, h);
+  }
 
   /// 创建一个带新 ID 的连接。
   factory Connection.create({
@@ -672,6 +692,7 @@ class Connection {
     String username = '',
     String password = '',
     String fileBrowserUrl = '',
+    String maxResolution = '',
     StreamPreset preset = const StreamPreset(),
   }) {
     return Connection(
@@ -684,6 +705,7 @@ class Connection {
       username: username,
       password: password,
       fileBrowserUrl: fileBrowserUrl,
+      maxResolution: maxResolution,
       preset: preset,
     );
   }
@@ -709,6 +731,7 @@ class Connection {
     String? username,
     String? password,
     String? fileBrowserUrl,
+    String? maxResolution,
     StreamPreset? preset,
   }) {
     return Connection(
@@ -721,6 +744,7 @@ class Connection {
       username: username ?? this.username,
       password: password ?? this.password,
       fileBrowserUrl: fileBrowserUrl ?? this.fileBrowserUrl,
+      maxResolution: maxResolution ?? this.maxResolution,
       preset: preset ?? this.preset,
     );
   }
@@ -735,6 +759,7 @@ class Connection {
         'username': username,
         'password': password,
         'fileBrowserUrl': fileBrowserUrl,
+        'maxResolution': maxResolution,
         'preset': preset.toJson(),
       };
 
@@ -750,6 +775,7 @@ class Connection {
       username: (json['username'] as String?) ?? '',
       password: json['password'] == null ? '' : json['password'].toString(),
       fileBrowserUrl: (json['fileBrowserUrl'] as String?) ?? '',
+      maxResolution: (json['maxResolution'] as String?) ?? '',
       preset: p is Map
           ? StreamPreset.fromJson(Map<String, dynamic>.from(p))
           : const StreamPreset(),

@@ -36,6 +36,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   UserScript? _presetScript;
   late final UserScript _trackerScript;
   late final UserScript _clipboardSocketHook;
+  late final UserScript _resolutionClampScript;
   bool _syncing = false;
   bool _pulling = false;
   bool _fileBrowserReachable = false;
@@ -61,6 +62,17 @@ class _WebViewScreenState extends State<WebViewScreen>
     // 在页面创建 WebSocket 前挂观察器，暴露 __selkiesSocket。
     _clipboardSocketHook = UserScript(
       source: clipboardSocketHookScript(),
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      forMainFrameOnly: true,
+    );
+    // 分辨率请求钳制常驻：页面跟随窗口的 r,WxH 请求超服务端上限时等比
+    // 缩小后再放行（上限来自连接配置，默认 1280x720），防超限断连循环。
+    final cap = conn.maxResolutionWH;
+    _resolutionClampScript = UserScript(
+      source: SelkiesPresetScript.resolutionClampScript(
+        maxWidth: cap.$1,
+        maxHeight: cap.$2,
+      ),
       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
       forMainFrameOnly: true,
     );
@@ -593,6 +605,7 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
           );
     final scripts = <UserScript>[
       _clipboardSocketHook,
+      _resolutionClampScript,
       if (_presetScript != null) _presetScript!,
       _trackerScript,
     ];

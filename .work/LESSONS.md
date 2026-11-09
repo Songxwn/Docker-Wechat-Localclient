@@ -2,6 +2,12 @@
 
 > 条目格式:`日期 | 现象 → 根因 → 对策/应用条件`。长篇证据链与部署实锤在思源笔记「wechat-selkies 部署笔记」踩坑记录节(20261104084756-iscp0o2),本台账只留可复用结论。
 
+## 2026-11-09
+
+- **最大化窗口→WS 反复断开**:Selkies 页面监听 resize 发 `r,<宽>x<高>`(宽高=逻辑尺寸×DPR,Retina ×2),服务端 `MAX_RES=1280x720` 钉死 → 超限请求触发管线反复重建失败,WS 断连循环;非最大化窗口尺寸小,不触发。**对策**:应急=客户端首页「串流预设」手动分辨率=开+1280x720+HiDPI=关(已实测修复);根治=客户端注入钳制脚本(2026-11-09 已实现,`resolutionClampScript` patch WebSocket/RTCDataChannel 的 send,超连接配置上限等比缩小后放行,默认上限 1280x720,零配置)。诊断关键:对照 camoufox 真浏览器同 URL 存活(排除服务端)+ localStorage 回放(排除设置污染)+ 裸 WS 重放 `r,3840x2100`(无视频流时不崩,说明崩因在流式会话中的超限请求)。
+- **「用户说调过 X」≠「X 生效」**:两次复测失败皆因 720p 从未进预设——用户在页内/服务端调,而客户端预设只存了 framerate;页内 `is_manual_resolution_mode=false` 与预设 JSON 才是存储态实锤。**铁律**:排查配置类问题先读持久层(plist/localStorage),再听口述;UI 三态开关「开+值」缺一不可(代码路径 `manualResolution == TriState.on` 才写宽高键)。
+- **flutter 进程名≠app 显示名**:进程是 `wechat_selkies_client`,pgrep 按显示名搜扑空;App 运行时禁止 `defaults write` 其 domain(NSUserDefaults 内存态退出时覆盖外部写入,且 flutter JSON 值 defaults 解析易失败)。
+
 ## 2026-11-08
 
 - **NSPasteboard MIME≠UTI 静默假成功**:`setData(data, forType: "image/png")` 返回 true 但存成无人识别的自定义类型,任何应用粘不出;`Pasteboard.writeImage` 兜底里 NSImage 解析失败同样静默丢 → snackbar 报成功、剪贴板实为旧图。**对策**:MIME→UTI 映射(public.png/public.jpeg/tiff/gif/bmp/webp)+ 写后读回自检(已实现于 `macos/Runner/MainFlutterWindow.swift` + `writeClipboardImage`)。铁律:剪贴板写入必须读回验证。

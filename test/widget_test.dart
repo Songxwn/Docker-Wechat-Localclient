@@ -38,6 +38,49 @@ void main() {
     expect(back.hasBasicAuth, true);
   });
 
+  test('maxResolution 存取往返 + 缺键兼容', () {
+    final c = Connection.create(name: 't', url: 'https://x:3001')
+        .copyWith(maxResolution: '1920x1080');
+    final back = Connection.fromJson(c.toJson());
+    expect(back.maxResolution, '1920x1080');
+    expect(back.maxResolutionWH, (1920, 1080));
+    // 老配置无 maxResolution 键 → 空串
+    final legacy = Connection.fromJson({
+      'id': 'x',
+      'name': 't',
+      'url': 'https://x:3001',
+    });
+    expect(legacy.maxResolution, '');
+    expect(legacy.maxResolutionWH, (1280, 720));
+  });
+
+  test('maxResolutionWH 解析兜底', () {
+    final base = Connection.create(name: 't', url: 'https://x:3001');
+    expect(base.copyWith(maxResolution: '2560x1440').maxResolutionWH,
+        (2560, 1440));
+    expect(base.copyWith(maxResolution: '').maxResolutionWH, (1280, 720));
+    expect(base.copyWith(maxResolution: 'abc').maxResolutionWH, (1280, 720));
+    expect(base.copyWith(maxResolution: '0x0').maxResolutionWH, (1280, 720));
+    expect(base.copyWith(maxResolution: '1280x').maxResolutionWH, (1280, 720));
+    expect(
+        base.copyWith(maxResolution: ' 1280x720 ').maxResolutionWH,
+        (1280, 720));
+  });
+
+  test('分辨率钳制脚本：patch 双通道 + 钳制上限 + 幂等标记', () {
+    final src = SelkiesPresetScript.resolutionClampScript(
+      maxWidth: 1280,
+      maxHeight: 720,
+    );
+    expect(src, contains('var MW=1280,MH=720;'));
+    expect(src, contains('__rclamp'));
+    expect(src, contains('window.WebSocket&&window.WebSocket.prototype'));
+    expect(
+        src, contains('window.RTCDataChannel&&window.RTCDataChannel.prototype'));
+    // charCode 114,44 = 'r,'（避免源码里出现裸 r, 字面量被误改）
+    expect(src, contains('charCodeAt(0)===114&&d.charCodeAt(1)===44'));
+  });
+
   test('StreamPreset 默认全跟随、无显式值', () {
     const p = StreamPreset();
     expect(p.hasExplicit, false);

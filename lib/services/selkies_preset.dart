@@ -341,6 +341,52 @@ class SelkiesPresetScript {
     return buf.toString();
   }
 
+  /// 分辨率请求钳制脚本（document-start，常驻）。
+  ///
+  /// Selkies 页面监听窗口 resize，向服务端发 `r,<宽>x<高>` 请求改分辨率
+  /// （宽高 = 窗口逻辑尺寸 × devicePixelRatio，仅客户端侧 4080 钳制）。
+  /// 服务端 MAX_RES 钉死时，超限请求会导致串流管线反复重建失败、WS 断连
+  /// 循环（2026-11-09 最大化窗口断连根因）。
+  ///
+  /// 本脚本 patch `WebSocket.prototype.send` 与 `RTCDataChannel.prototype.send`
+  /// （bundle 实锤两条 `r,` 发送路径均在主世界），拦截 `r,` 前缀消息：
+  /// 超上限则等比缩小（宽高取偶）后再放行，未超限原样通过——跟随窗口
+  /// 行为保留，最大化安全。`__rclamp` 标记防重复 patch。
+  ///
+  /// 只认 `p[1]` 为 `整数x整数` 结构的消息；同前缀异构消息原样放行。
+  static String resolutionClampScript({
+    required int maxWidth,
+    required int maxHeight,
+  }) {
+    return '''
+(function(){
+try{
+var MW=$maxWidth,MH=$maxHeight;
+function cl(m){
+var p=m.split(',');if(p.length<2)return m;
+var wh=p[1].split('x');var w=parseInt(wh[0],10),h=parseInt(wh[1],10);
+if(!(w>0&&h>0))return m;
+if(w<=MW&&h<=MH)return m;
+var s=Math.min(MW/w,MH/h);
+var nw=Math.max(2,Math.floor(w*s/2)*2),nh=Math.max(2,Math.floor(h*s/2)*2);
+p[1]=nw+'x'+nh;return p.join(',');
+}
+function pt(pr){
+if(!pr)return;var os=pr.send;
+if(!os||os.__rclamp)return;
+pr.send=function(d){
+try{if(typeof d==='string'&&d.length>2&&d.charCodeAt(0)===114&&d.charCodeAt(1)===44){d=cl(d);}}catch(e){}
+return os.call(this,d);
+};
+pr.send.__rclamp=1;
+}
+pt(window.WebSocket&&window.WebSocket.prototype);
+pt(window.RTCDataChannel&&window.RTCDataChannel.prototype);
+}catch(e){}
+})();
+''';
+  }
+
   /// 追踪脚本（document-start，常驻）：记录页内用户意图修改的键。
   ///
   /// Selkies dashboard 经 `window.postMessage` 把用户操作发给 core
