@@ -10,11 +10,11 @@ void main() {
       clientOwnsClipboard: true,
     );
     expect(src, isNotNull);
-    // 即使用户预设开了上行，接管模式下也必须写 false
-    expect(src!, contains("W('clipboard_in_enabled','false')"));
+    // 上行开关必须保持 true（否则壳内推送会被上游 sendClipboardData 丢弃）
+    expect(src!, contains("W('clipboard_in_enabled','true')"));
+    // 下行两项必须关掉：服务端推送不再自动写回本机
     expect(src, contains("W('clipboard_out_enabled','false')"));
     expect(src, contains("W('clipboard_seamless','false')"));
-    expect(src, isNot(contains("W('clipboard_in_enabled','true')")));
   });
 
   test('未接管时保留用户预设值', () {
@@ -33,6 +33,6 @@ void main() {
       clientOwnsClipboard: true,
     );
     expect(src, isNotNull);
-    expect(src!, contains("W('clipboard_in_enabled','false')"));
+    expect(src!, contains("W('clipboard_out_enabled','false')"));
   });
 }

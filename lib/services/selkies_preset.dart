@@ -284,7 +284,10 @@ class SelkiesPresetScript {
     final entries = toEntries(preset);
     if (clientOwnsClipboard) {
       // 接管键优先级最高：覆盖用户预设里可能存在的值。
-      entries['clipboard_in_enabled'] = 'false';
+      // clipboard_in_enabled 必须保持 true——上游 sendClipboardData 用它门控
+      // 上行发送，置 false 会让壳内推送被静默丢弃；页面的「自动上行读取」
+      // 改由 clipboardTakeoverScript() 掐断 navigator.clipboard.read* 来阻止。
+      entries['clipboard_in_enabled'] = 'true';
       entries['clipboard_out_enabled'] = 'false';
       entries['clipboard_seamless'] = 'false';
     }

@@ -334,6 +334,54 @@ String buildClipboardImageScript(String mimeType, Uint8List bytes) {
       '}catch(e){return "err:"+e;}})();';
 }
 
+/// 单个分片的原始字节数。
+///
+/// 单次 `evaluateJavascript` 塞整张大图的 base64（4 MB 图 → 5.6 MB 脚本）
+/// 会被 WKWebView 拒绝或静默返回 nil，所以大图必须分片发送。
+const int kClipboardImageChunkBytes = 256 * 1024;
+
+/// 生成「开始分片传输」脚本。
+///
+/// ⚠️ wechat-selkies 0.0.17 的服务端是**老版协议，没有 transfer id**：
+/// `cbs,<mime>,<total>` / `cbd,<b64>` / `cbe`（上游新版才是带 tid 的形式）。
+/// 按老版发，否则服务端会拿 mime 去 `int()` 并报
+/// "invalid literal for int() with base 10: 'image/png'"。
+String buildClipboardImageBeginScript({
+  required String mimeType,
+  required int totalBytes,
+  required Uint8List bytes,
+}) {
+  final mime = jsonEncode(mimeType);
+  final sig = jsonEncode(
+      '${bytes.length}:${bytes.isEmpty ? 0 : bytes.first}:${bytes.isEmpty ? 0 : bytes.last}');
+  return '(function(){try{'
+      'var ws=window.__selkiesSocket;'
+      'if(!ws||ws.readyState!==1)return "err:websocket not open";'
+      'window.__selkiesClipSelfPushImage=$sig;'
+      'ws.send("cbs,"+$mime+","+$totalBytes);'
+      'return "ok";'
+      '}catch(e){return "err:"+e;}})();';
+}
+
+/// 生成「发送一个分片」脚本：老版 `cbd,<b64>`（无 tid）。
+String buildClipboardImageChunkScript({required Uint8List chunk}) {
+  final data = jsonEncode(base64Encode(chunk));
+  return '(function(){try{'
+      'var ws=window.__selkiesSocket;'
+      'if(!ws||ws.readyState!==1)return "err:websocket not open";'
+      'ws.send("cbd,"+$data);'
+      'return "ok";'
+      '}catch(e){return "err:"+e;}})();';
+}
+
+/// 生成「结束分片传输」脚本：老版 `cbe`（无 tid）。
+String buildClipboardImageEndScript() => '(function(){try{'
+      'var ws=window.__selkiesSocket;'
+      'if(!ws||ws.readyState!==1)return "err:websocket not open";'
+      'ws.send("cbe");'
+      'return "ok";'
+      '}catch(e){return "err:"+e;}})();';
+
 typedef JavascriptEvaluator = Future<dynamic> Function(String source);
 
 /// 把 [text] 注入远端页面。页面返回 `err:` 前缀时抛异常。
@@ -353,7 +401,11 @@ Future<void> pushClipboardToRemote({
   }
 }
 
-/// 把图片写入远端剪贴板；超过 [kMaxClipboardImageBytes] 直接拒绝。
+/// 把图片写入远端剪贴板。
+///
+/// 小于 [kClipboardImageChunkBytes] 走单帧 `cb,<mime>,<b64>`；更大的图按
+/// 服务端老版协议分片（`cbs,<mime>,<total>` → `cbd,<b64>` ×N → `cbe`），
+/// 避免超长脚本注入失败。
 Future<void> pushClipboardImageToRemote({
   required ClipboardImage image,
   required JavascriptEvaluator evaluateJavascript,
@@ -365,11 +417,38 @@ Future<void> pushClipboardImageToRemote({
     throw ClipboardBridgeException(
         '图片过大（${(image.bytes.length / (1024 * 1024)).toStringAsFixed(1)} MB），上限 ${(kMaxClipboardImageBytes / (1024 * 1024)).round()} MB');
   }
-  final result = await evaluateJavascript(
-    buildClipboardImageScript(image.mimeType, image.bytes),
-  );
-  if (result is String && result.startsWith('err:')) {
-    throw ClipboardBridgeException('远端页面拒绝同步：$result');
+
+  if (image.bytes.length < kClipboardImageChunkBytes) {
+    final result = await evaluateJavascript(
+      buildClipboardImageScript(image.mimeType, image.bytes),
+    );
+    if (result is String && result.startsWith('err:')) {
+      throw ClipboardBridgeException('远端页面拒绝同步：$result');
+    }
+    return;
+  }
+
+  final begin = await evaluateJavascript(buildClipboardImageBeginScript(
+    mimeType: image.mimeType,
+    totalBytes: image.bytes.length,
+    bytes: image.bytes,
+  ));
+  if (begin is String && begin.startsWith('err:')) {
+    throw ClipboardBridgeException('远端页面拒绝分片传输：$begin');
+  }
+  for (var off = 0; off < image.bytes.length; off += kClipboardImageChunkBytes) {
+    final end = off + kClipboardImageChunkBytes;
+    final chunk = image.bytes.sublist(
+        off, end > image.bytes.length ? image.bytes.length : end);
+    final r =
+        await evaluateJavascript(buildClipboardImageChunkScript(chunk: chunk));
+    if (r is String && r.startsWith('err:')) {
+      throw ClipboardBridgeException('分片发送失败（偏移 $off）：$r');
+    }
+  }
+  final finish = await evaluateJavascript(buildClipboardImageEndScript());
+  if (finish is String && finish.startsWith('err:')) {
+    throw ClipboardBridgeException('结束分片传输失败：$finish');
   }
 }
 

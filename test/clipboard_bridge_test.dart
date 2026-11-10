@@ -322,4 +322,25 @@ void main() {
     expect(script, contains('readText'));
     expect(script, contains('defineProperty'));
   });
+
+  test('大图走老版分片协议 cbs/cbd/cbe(无 tid)', () {
+    final bytes = Uint8List(kClipboardImageChunkBytes * 2 + 10);
+    final begin = buildClipboardImageBeginScript(
+        mimeType: 'image/png', totalBytes: bytes.length, bytes: bytes);
+    expect(begin, contains('ws.send("cbs,"'));
+    expect(begin, contains('"image/png"'));
+    expect(begin, isNot(contains('a17'))); // 无 tid
+
+    final chunk = buildClipboardImageChunkScript(
+        chunk: Uint8List.fromList([1, 2, 3]));
+    expect(chunk, contains('ws.send("cbd,"'));
+
+    expect(buildClipboardImageEndScript(), contains('ws.send("cbe")'));
+  });
+
+  test('512 KB 以下仍走单帧 cb', () {
+    final small = Uint8List(1024);
+    expect(buildClipboardImageScript('image/png', small), contains('ws.send("cb,"'));
+    expect(kClipboardImageChunkBytes, 256 * 1024);
+  });
 }
