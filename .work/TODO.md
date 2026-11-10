@@ -5,6 +5,7 @@
 ## 数据缺口 / 待办
 
 - [ ] 上游 PR #2(Songxwn/Docker-Wechat-Localclient)合并 → 切回上游主线,retire fork 内 IME/剪贴板补丁(跟踪2/3/5);issue #3 随合并自动关闭
+- [ ] **服务端版本观察(2026-11-09 盘点:无需更新)**:wechat-selkies 最新 = v0.0.17(2026-10-08,ghcr 数字 tag 封顶、releases 最新),容器已是最新;基镜像 linuxserver/baseimage-selkies:ubuntunoble = Python 老栈,上游 selkies-gstreamer 的 Rust 重写(crates/selkies)尚未被 wechat-selkies 跟进 → Portainer update stack 只会原地重拉同一镜像。触发条件 = 作者 rebase 新基镜像发新版(已提 issue #130);届时剪贴板协议不同,客户端接管方案需适配
 - [ ] 推送图片 >16 MB:走服务端分片上传 verbs(`cbs/cbd/cbe`,协议已核实未实现)——有实际大图需求再做
 - [ ] filebrowser 上游已归档(2026-09-01 起 no fix):出现可靠社区续作镜像时评估替换(卷结构兼容,只换 image)
 - [ ] 思源笔记「客户端装法」命令随每次发版更新资产链接(当前 v5.5.2 / `WeChat-Selkies-macos.zip`;v5.5.2 = 分辨率自动钳制,装后预设可撤回「跟随服务端」复测最大化)
