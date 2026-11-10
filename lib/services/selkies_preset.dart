@@ -269,8 +269,25 @@ class SelkiesPresetScript {
   /// 3. `manualResolution=off` 时删手动分辨率三键（回到跟随窗口）；
   /// 4. `__selkies_preset_pipeline` 在 core 就绪后转为 pipelineControl 消息，
   ///    覆盖服务端 `*_on_start` 默认。
-  static String? build(StreamPreset preset, {required bool manualOff}) {
+  /// 生成注入脚本。
+  ///
+  /// [clientOwnsClipboard] = 客户端完全接管剪贴板：强制关闭页面自带同步
+  /// （`clipboard_in_enabled` 页面读本机推远端、`clipboard_out_enabled` +
+  /// `clipboard_seamless` 服务端推送写回本机），改由壳内 hook/按钮独占。
+  /// 这两个开关在上游是纯前端行为（见 served bundle `canRead` /
+  /// `canWriteLocal`），关掉不影响服务端 `cw`/`cr` 帧能力，壳内通道照常工作。
+  static String? build(
+    StreamPreset preset, {
+    required bool manualOff,
+    bool clientOwnsClipboard = false,
+  }) {
     final entries = toEntries(preset);
+    if (clientOwnsClipboard) {
+      // 接管键优先级最高：覆盖用户预设里可能存在的值。
+      entries['clipboard_in_enabled'] = 'false';
+      entries['clipboard_out_enabled'] = 'false';
+      entries['clipboard_seamless'] = 'false';
+    }
     if (entries.isEmpty && !manualOff) return null;
     final buf = StringBuffer()
       ..writeln('(function(){')

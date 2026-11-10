@@ -116,6 +116,30 @@ void main() {
     expect(script, contains('__selkiesClip'));
   });
 
+  test('hook 默认不自动写回本机（客户端接管），仅拉取时开', () {
+    final script = clipboardSocketHookScript();
+    // 三处写回都被 autoApply() 门控
+    expect(RegExp(r'autoApply\(\)').allMatches(script).length, greaterThanOrEqualTo(4));
+    expect(script, contains('__selkiesClipAutoApply === true'));
+    // 默认值不是 true（只在拉取脚本里置 true）
+    expect(clipboardSocketHookScript(), isNot(contains('__selkiesClipAutoApply=true')));
+    expect(buildClipboardPullRequestScript(), contains('__selkiesClipAutoApply=true'));
+    expect(buildClipboardPullDoneScript(), contains('__selkiesClipAutoApply=false'));
+  });
+
+  test('自推送回声被抑制（文本/图片）', () {
+    final script = clipboardSocketHookScript();
+    expect(script, contains('isSelfEcho'));
+    expect(script, contains('isSelfEchoImage'));
+    expect(script, contains('__selkiesClipSelfPush'));
+    // 推送脚本写入签名
+    expect(buildClipboardUpdateScript('abc'), contains('__selkiesClipSelfPush'));
+    expect(
+      buildClipboardImageScript('image/png', Uint8List.fromList([1, 2, 3])),
+      contains('__selkiesClipSelfPushImage'),
+    );
+  });
+
   test('pull 请求脚本发送 cr 并回读缓存序号', () {
     final script = buildClipboardPullRequestScript();
     expect(script, contains('__selkiesSocket'));

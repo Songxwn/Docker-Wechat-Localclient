@@ -18,6 +18,9 @@ String buildClipboardUpdateScript(String text) {
   // 页面自己取 location.origin，避免把 origin 硬编码进脚本。
   final literal = jsonEncode(text);
   return '(function(){try{'
+      // 记录本次自推送的文本签名：服务端把它广播回来时 hook 忽略，
+      // 避免「刚推上去的内容又被回推覆盖本机剪贴板」。
+      'window.__selkiesClipSelfPush=$literal;'
       'window.postMessage({type:"clipboardUpdateFromUI",text:$literal},'
       'window.location.origin);'
       'return "ok";'
@@ -89,6 +92,32 @@ String clipboardSocketHookScript() => '''
     } catch (e) {}
   }
 
+  // 是否把服务端秒推的剪贴板自动写回本机。壳内接管后默认 false:
+  // 只有「点拉取按钮」时置 true,让 cr 的应答写回;平时服务端推送只更新
+  // 缓存(__selkiesClip),不覆盖本机剪贴板。
+  function autoApply() {
+    try { return window.__selkiesClipAutoApply === true; } catch (e) { return false; }
+  }
+  // 服务端广播回来的刚由本机推上去的文本 → 视为回声，不写回本机。
+  function isSelfEcho(text) {
+    try {
+      if (window.__selkiesClipSelfPush &&
+          window.__selkiesClipSelfPush === text) return true;
+    } catch (e) {}
+    return false;
+  }
+  // 图片回声（签名 = 长度:首字节:尾字节）。
+  function isSelfEchoImage(b64) {
+    try {
+      if (!window.__selkiesClipSelfPushImage) return false;
+      var bin = atob(b64);
+      var sig = bin.length + ':' +
+        (bin.length ? bin.charCodeAt(0) : 0) + ':' +
+        (bin.length ? bin.charCodeAt(bin.length - 1) : 0);
+      return sig === window.__selkiesClipSelfPushImage;
+    } catch (e) { return false; }
+  }
+
   var incoming = null;
   function onServerClipboard(d) {
     if (typeof d !== 'string') return;
@@ -97,13 +126,17 @@ String clipboardSocketHookScript() => '''
         var text = textFromBytes(bytesFromB64(d.substring(10)));
         if (text) {
           record(text, null, null);
-          call('$kClipboardTextHandler', text);
+          if (autoApply() && !isSelfEcho(text)) {
+            call('$kClipboardTextHandler', text);
+          }
         }
       } else if (d.indexOf('clipboard_binary,') === 0) {
         var p = d.split(',');
         if (p.length >= 3) {
           record(null, p[1], p.slice(2).join(','));
-          call('$kClipboardImageHandler', p[1], p.slice(2).join(','));
+          if (autoApply() && !isSelfEchoImage(p.slice(2).join(','))) {
+            call('$kClipboardImageHandler', p[1], p.slice(2).join(','));
+          }
         }
       } else if (d.indexOf('clipboard_start,') === 0) {
         var q = d.split(',');
@@ -137,12 +170,14 @@ String clipboardSocketHookScript() => '''
           var t = textFromBytes(c.bytes);
           if (t) {
             record(t, null, null);
-            call('$kClipboardTextHandler', t);
+            if (autoApply()) call('$kClipboardTextHandler', t);
           }
         } else {
           var b64 = b64FromBytes(c.bytes);
           record(null, c.mime, b64);
-          call('$kClipboardImageHandler', c.mime, b64);
+          if (autoApply() && !isSelfEchoImage(b64)) {
+            call('$kClipboardImageHandler', c.mime, b64);
+          }
         }
       }
     } catch (e) {}
@@ -240,9 +275,14 @@ Future<ClipboardImage?> readClipboardImage() async {
 String buildClipboardImageScript(String mimeType, Uint8List bytes) {
   final mime = jsonEncode(mimeType);
   final data = jsonEncode(base64Encode(bytes));
+  // 与 Dart 端 _imageSignature 同算法的签名（长度:首字节:尾字节），
+  // 服务端把同一张图广播回来时据此忽略，避免自推送回灌。
+  final sig = jsonEncode(
+      '${bytes.length}:${bytes.isEmpty ? 0 : bytes.first}:${bytes.isEmpty ? 0 : bytes.last}');
   return '(function(){try{'
       'var ws=window.__selkiesSocket;'
       'if(!ws||ws.readyState!==1)return "err:websocket not open";'
+      'window.__selkiesClipSelfPushImage=$sig;'
       'ws.send("cb,"+$mime+","+$data);'
       'return "ok";'
       '}catch(e){return "err:"+e;}})();';
@@ -299,9 +339,15 @@ String buildClipboardPullRequestScript() =>
     '(function(){try{'
     'var ws=window.__selkiesSocket;'
     'if(!ws||ws.readyState!==1)return "err:websocket not open";'
+    // cr 的应答由 hook 写回本机：请求期间开自动写回。
+    'window.__selkiesClipAutoApply=true;'
     'ws.send("cr");'
     'return String(window.__selkiesClipSeq||0);'
     '}catch(e){return "err:"+e;}})();';
+
+/// 结束一次拉取：恢复「不自动写回」的接管状态。
+String buildClipboardPullDoneScript() =>
+    '(function(){try{window.__selkiesClipAutoApply=false;}catch(e){}})()';
 
 /// 读取页面缓存的最近一次服务端剪贴板（JSON 字符串，无则 "null"）。
 String readRemoteClipboardCacheScript() =>
@@ -426,36 +472,43 @@ Future<RemoteClipboardSnapshot?> pullRemoteClipboard({
   final hardDeadline = started.add(const Duration(seconds: 120));
   var idleDeadline = started.add(timeout);
   var lastReceived = -1;
-  while (true) {
-    final snap = decodeRemoteClipboardSnapshot(
-      await evaluateJavascript(readRemoteClipboardCacheScript()),
-    );
-    if (snap != null && snap.seq > baseSeq) return snap;
-    final now = DateTime.now();
-    final progress = onProgress == null
-        ? null
-        : ClipboardTransferProgress.decode(
-            await evaluateJavascript(readRemoteClipboardProgressScript()),
-          );
-    if (progress != null) {
-      onProgress!(progress.received, progress.total);
-      if (progress.received > lastReceived) {
-        // 有新字节落地，续期；停止增长超过 stallTimeout 视为传输中断。
-        lastReceived = progress.received;
-        idleDeadline = now.add(stallTimeout);
+  try {
+    while (true) {
+      final snap = decodeRemoteClipboardSnapshot(
+        await evaluateJavascript(readRemoteClipboardCacheScript()),
+      );
+      if (snap != null && snap.seq > baseSeq) return snap;
+      final now = DateTime.now();
+      final progress = onProgress == null
+          ? null
+          : ClipboardTransferProgress.decode(
+              await evaluateJavascript(readRemoteClipboardProgressScript()),
+            );
+      if (progress != null) {
+        onProgress!(progress.received, progress.total);
+        if (progress.received > lastReceived) {
+          // 有新字节落地，续期；停止增长超过 stallTimeout 视为传输中断。
+          lastReceived = progress.received;
+          idleDeadline = now.add(stallTimeout);
+        }
+        if (now.isAfter(idleDeadline)) {
+          throw ClipboardBridgeException(
+              '远端剪贴板传输中断（${(progress.received / (1024 * 1024)).toStringAsFixed(1)}'
+              '/${(progress.total / (1024 * 1024)).toStringAsFixed(1)} MB），可稍后重试');
+        }
+      } else if (now.isAfter(idleDeadline)) {
+        return snap?.copyWith(fresh: false);
       }
-      if (now.isAfter(idleDeadline)) {
-        throw ClipboardBridgeException(
-            '远端剪贴板传输中断（${(progress.received / (1024 * 1024)).toStringAsFixed(1)}'
-            '/${(progress.total / (1024 * 1024)).toStringAsFixed(1)} MB），可稍后重试');
+      if (now.isAfter(hardDeadline)) {
+        throw const ClipboardBridgeException('拉取超时');
       }
-    } else if (now.isAfter(idleDeadline)) {
-      return snap?.copyWith(fresh: false);
+      await Future<void>.delayed(const Duration(milliseconds: 350));
     }
-    if (now.isAfter(hardDeadline)) {
-      throw const ClipboardBridgeException('拉取超时');
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+  } finally {
+    // 无论成功/超时/异常，都回到「不自动写回」的接管状态。
+    try {
+      await evaluateJavascript(buildClipboardPullDoneScript());
+    } catch (_) {}
   }
 }
 

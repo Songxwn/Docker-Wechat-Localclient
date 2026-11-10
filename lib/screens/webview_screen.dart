@@ -595,6 +595,8 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
     final presetSrc = SelkiesPresetScript.build(
       conn.preset,
       manualOff: conn.preset.manualResolution == TriState.off,
+      // 壳内接管剪贴板：关掉页面自带同步，避免两边互相覆盖。
+      clientOwnsClipboard: true,
     );
     _presetScript = presetSrc == null
         ? null
