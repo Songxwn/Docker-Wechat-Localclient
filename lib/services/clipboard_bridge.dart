@@ -211,6 +211,52 @@ String clipboardSocketHookScript() => '''
 })();
 ''';
 
+/// 持续压制 Selkies 页面自带的剪贴板循环（客户端接管）。
+///
+/// 光注入 localStorage 不够：服务端在设置同步时下发 `settings`（含
+/// `clipboard_in_enabled` / `clipboard_out_enabled` / `clipboard_seamless`），
+/// 页面 `handleSettingsMessage` 直接用服务端值覆盖并写回 localStorage，
+/// 于是「页面自动读本机剪贴板推远端」「服务端推送自动写回本机」又活过来。
+///
+/// 这里在页面层持续压制：把三个 localStorage 键每秒钉回 `false`，并让
+/// `navigator.clipboard.readText/read` 永不 resolve——那是页面自动上行读取的
+/// 唯一入口，掐断后它读不到内容也就推不出去。
+///
+/// 不影响壳内通道：上行走 `postMessage(clipboardUpdateFromUI)` → 页面
+/// `sendExplicitClipboard`（不经过 clipboard.read），下行走我们自己的
+/// WebSocket 帧捕获 + 按需 `cr` 拉取。
+String clipboardTakeoverScript() => '''
+(function(){
+  if (window.__selkiesClipTakeover) return;
+  window.__selkiesClipTakeover = true;
+
+  // 1) 三个开关钉死为 false（服务端 settings 覆盖后会被这里改回来）
+  function pin() {
+    try {
+      var ns1=(window.location.origin+window.location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_');
+      var ns2=window.location.href.split('#')[0].replace(/[^a-zA-Z0-9.-_]/g,'_');
+      var keys=['clipboard_in_enabled','clipboard_out_enabled','clipboard_seamless'];
+      for (var i=0;i<keys.length;i++) {
+        try{localStorage.setItem(ns1+'_'+keys[i],'false');}catch(e){}
+        try{localStorage.setItem(ns2+'_'+keys[i],'false');}catch(e){}
+      }
+    } catch(e) {}
+  }
+  pin();
+  try { setInterval(pin, 1000); } catch(e) {}
+
+  // 2) 掐断页面自动上行读取：readText/read 永不 resolve
+  try {
+    var never = function(){ return new Promise(function(){}); };
+    var cb = navigator.clipboard;
+    if (cb) {
+      try { Object.defineProperty(cb, 'readText', {value: never, configurable: true, writable: true}); } catch(e) {}
+      try { Object.defineProperty(cb, 'read', {value: never, configurable: true, writable: true}); } catch(e) {}
+    }
+  } catch(e) {}
+})();
+''';
+
 /// 本机剪贴板图片（PNG 字节）。`pasteboard` 在 macOS/iOS/Windows/
 /// Linux/Android/Web 上返回 PNG；Web 也走浏览器 Clipboard API。
 class ClipboardImage {

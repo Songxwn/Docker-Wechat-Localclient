@@ -36,6 +36,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   UserScript? _presetScript;
   late final UserScript _trackerScript;
   late final UserScript _clipboardSocketHook;
+  late final UserScript _clipboardTakeover;
   late final UserScript _resolutionClampScript;
   bool _syncing = false;
   bool _pulling = false;
@@ -62,6 +63,13 @@ class _WebViewScreenState extends State<WebViewScreen>
     // 在页面创建 WebSocket 前挂观察器，暴露 __selkiesSocket。
     _clipboardSocketHook = UserScript(
       source: clipboardSocketHookScript(),
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      forMainFrameOnly: true,
+    );
+    // 页面层持续压制自带剪贴板循环（服务端 settings 会覆盖 localStorage 注入，
+    // 单靠预设关不掉）。
+    _clipboardTakeover = UserScript(
+      source: clipboardTakeoverScript(),
       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
       forMainFrameOnly: true,
     );
@@ -607,6 +615,7 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
           );
     final scripts = <UserScript>[
       _clipboardSocketHook,
+      _clipboardTakeover,
       _resolutionClampScript,
       if (_presetScript != null) _presetScript!,
       _trackerScript,

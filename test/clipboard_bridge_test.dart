@@ -310,4 +310,16 @@ void main() {
     expect(snap!.fresh, isTrue);
     expect(snap.text, 'done');
   });
+
+  test('接管脚本: 钉三键 + 掐断页面自动读', () {
+    final script = clipboardTakeoverScript();
+    expect(script, contains('__selkiesClipTakeover'));
+    expect(script, contains('clipboard_in_enabled'));
+    expect(script, contains('clipboard_out_enabled'));
+    expect(script, contains('clipboard_seamless'));
+    expect(script, contains("'false'"));
+    expect(script, contains('setInterval(pin, 1000)'));
+    expect(script, contains('readText'));
+    expect(script, contains('defineProperty'));
+  });
 }
