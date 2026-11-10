@@ -8,6 +8,16 @@
 - **「用户说调过 X」≠「X 生效」**:两次复测失败皆因 720p 从未进预设——用户在页内/服务端调,而客户端预设只存了 framerate;页内 `is_manual_resolution_mode=false` 与预设 JSON 才是存储态实锤。**铁律**:排查配置类问题先读持久层(plist/localStorage),再听口述;UI 三态开关「开+值」缺一不可(代码路径 `manualResolution == TriState.on` 才写宽高键)。
 - **flutter 进程名≠app 显示名**:进程是 `wechat_selkies_client`,pgrep 按显示名搜扑空;App 运行时禁止 `defaults write` 其 domain(NSUserDefaults 内存态退出时覆盖外部写入,且 flutter JSON 值 defaults 解析易失败)。
 
+## 2026-11-10
+
+- **`clipboard_in_enabled=false` 会连自家推送一起杀掉**:上游 `sendClipboardData` 用它门控全部上行(`skip('clipboardSkipInDisabled')`),关掉后壳内显式推送在到达 socket 前就被丢弃,表现像"被远端覆盖"。**对策**:保持 `true`,用 `navigator.clipboard.readText/read` 永不 resolve 来阻止页面**自动**读;只关 `clipboard_out_enabled`/`clipboard_seamless` 阻止下行回写。
+- **服务端 settings 会覆盖 document-start 注入**:页面 `handleSettingsMessage` 用服务端下发的值覆盖 localStorage 并回写,所以一次性注入关不掉。**对策**:每秒 pin 一次(`setInterval`)+ 函数级拦截(`clipboard.read*`)。
+- **wechat-selkies 0.0.17 是"无 transfer id"的老版剪贴板协议**:`cbs,<mime>,<total>` / `cbd,<b64>` / `cbe`;上游新版才是 `cbs,<tid>,<mime>,<total>`。按新版发 → 服务端 `int('image/png')` 崩 → 整段丢弃。**对策**:照容器内实际源码写协议,别照上游 main。
+- **`enable_binary_clipboard` 默认 false**:容器启动未传该参数时,服务端丢弃一切图片剪贴板帧。**对策**:stack 加 `SELKIES_ENABLE_BINARY_CLIPBOARD=true`(settings.py 支持 `SELKIES_` 前缀)。
+- **WKWebView 单次 `evaluateJavascript` 塞大 base64 会静默失败**:返回 nil 且不抛错,只看 `err:` 前缀会造成"假成功"。**对策**:>256 KB 一律分片注入,每片检查返回值。
+- **版本 bump 要用精确断言**:`sed s/5.5.1+1/5.6.0+1/` 在文件已是 5.5.2+1 时静默无操作,导致 tag 版本与产物不符、装的还是旧构建。**对策**:bump 后 `grep '^version'` 确认,并用 `python` 断言原值存在。
+- **诊断优先于推断**:剪贴板图片排查绕了三轮(猜 gating / 猜大小 / 猜协议),最后靠 `docker logs` 一行 `Invalid cbs message` 定位。**对策**:协议类问题第一时间抓服务端日志与容器内实际源码。
+
 ## 2026-11-08
 
 - **NSPasteboard MIME≠UTI 静默假成功**:`setData(data, forType: "image/png")` 返回 true 但存成无人识别的自定义类型,任何应用粘不出;`Pasteboard.writeImage` 兜底里 NSImage 解析失败同样静默丢 → snackbar 报成功、剪贴板实为旧图。**对策**:MIME→UTI 映射(public.png/public.jpeg/tiff/gif/bmp/webp)+ 写后读回自检(已实现于 `macos/Runner/MainFlutterWindow.swift` + `writeClipboardImage`)。铁律:剪贴板写入必须读回验证。

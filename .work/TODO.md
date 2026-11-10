@@ -20,7 +20,7 @@
 - [ ] v5.4.0/v5.5.0 资产在第二台机器安装跑通(macOS 资产名无版本号,外链脚本注意)
 - [ ] filebrowser 首登改密已完成(初始密码出现在部署记录里)
 
-- [x] 剪贴板接管(v5.6.0):关页面三开关 + hook 仅显式拉取写回 + 自推送回声抑制,本地实测推送不再被覆盖
+- [x] 剪贴板接管(v5.6.5,文字+图片实机验证通过):`clipboard_in_enabled` 保持 true(否则自家推送被丢弃)、`clipboard_out_enabled`/`clipboard_seamless` pin false、页面自动读用 `clipboard.read*` 拦截;图片按 0.0.17 老版协议 `cbs/cbd/cbe`(无 tid)每片 256KB 分片;服务端加 `SELKIES_ENABLE_BINARY_CLIPBOARD=true`
 
 ## 维护说明
 
