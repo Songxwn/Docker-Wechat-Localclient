@@ -10,6 +10,7 @@
 - **分辨率请求自动钳制**：页面跟随窗口发出的 `r,宽x高` 分辨率请求若超过「服务端最大分辨率」（连接表单可选字段，留空 = 1280x720），注入脚本自动等比缩小（宽高取偶）后再放行——服务端 MAX_RES 钉死时，最大化窗口/Retina 高倍率产生的超限请求会导致串流管线反复重建失败、WS 断连循环，此功能免配置根治（跟随窗口行为保留，小窗口请求不受影响）
 - **应用内 WebView**：在应用内直接打开网页版微信（Android / iOS / macOS / Web）
 - **剪贴板双向同步（客户端接管）**：注入脚本强制关闭 Selkies 页面自带的三项同步（`clipboard_in_enabled` / `clipboard_out_enabled` / `clipboard_seamless`），避免网页层与本客户端互相覆盖——否则页面会自动读取本机剪贴板推送远端、并把服务端推送写回本机，「本机→远端」刚推的内容会被远端回推覆盖。接管后：**上行**用连接页标题栏粘贴按钮（图片经 `pasteboard` 转 PNG，上限 16 MB），文本走 `clipboardUpdateFromUI`，图片走 `cb,<mime>,<base64>`；**下行**只在点击「拉取」按钮（复制图标）时经 `cr` 请求取回，大图分片显示进度条，平时服务端推送只更新缓存不覆盖本机剪贴板。自推送回声（文本/图片签名）会被忽略，不回灌本机。不依赖浏览器 `clipboard-read` 权限，WKWebView / Safari 下同样可用；图片需开启二进制剪贴板
+- **后台解码器释放（macOS 内存保护）**：WebCodecs 在页面隐藏/停止绘制时不释放 VideoToolbox/CoreMedia 资源；客户端在页面不可见时关闭 `VideoDecoder` 并丢弃隐藏期间的 decode，回到前台再重建，避免长期挂机后 WebContent 内存涨到数 GB
 - **远端文件批量管理**：由部署侧 [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) 侧车承担（挂同一 `wechat` 数据卷），客户端不内置文件面板；连接可配置 FileBrowser 地址，连接页标题栏文件夹按钮一键跳系统浏览器（已配置且探测可达才显示该按钮）；上游 Selkies file-manager API 无 delete 端点，删除（永久）类操作集中在 filebrowser
 - **系统浏览器打开**：可按连接配置使用系统默认浏览器打开（全平台，Windows / Linux 桌面默认使用此方式）
 - **忽略 SSL 证书错误**：适配 wechat-selkies 常见的自签名 HTTPS

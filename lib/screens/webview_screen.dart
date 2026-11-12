@@ -10,6 +10,7 @@ import '../models/connection.dart';
 import '../services/clipboard_bridge.dart';
 import '../services/platform_service.dart';
 import '../services/selkies_preset.dart';
+import '../services/video_decoder_guard.dart';
 
 /// 应用内 WebView 页面：加载 wechat-selkies 网页版微信。
 /// 支持忽略 SSL 证书错误、HTTP Basic 认证注入。
@@ -38,6 +39,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   late final UserScript _clipboardSocketHook;
   late final UserScript _clipboardTakeover;
   late final UserScript _resolutionClampScript;
+  late final UserScript _videoDecoderGuard;
   bool _syncing = false;
   bool _pulling = false;
   bool _fileBrowserReachable = false;
@@ -70,6 +72,13 @@ class _WebViewScreenState extends State<WebViewScreen>
     // 单靠预设关不掉）。
     _clipboardTakeover = UserScript(
       source: clipboardTakeoverScript(),
+      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+      forMainFrameOnly: true,
+    );
+    // macOS WebCodecs 在页面隐藏时不释放解码器资源；本脚本在后台关闭
+    // VideoDecoder、回到前台重建，避免 WebContent 内存无上限增长。
+    _videoDecoderGuard = UserScript(
+      source: videoDecoderVisibilityGuardScript(),
       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
       forMainFrameOnly: true,
     );
@@ -614,6 +623,7 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
             forMainFrameOnly: true,
           );
     final scripts = <UserScript>[
+      _videoDecoderGuard,
       _clipboardSocketHook,
       _clipboardTakeover,
       _resolutionClampScript,

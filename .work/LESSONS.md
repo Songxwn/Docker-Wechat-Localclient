@@ -2,6 +2,10 @@
 
 > 条目格式:`日期 | 现象 → 根因 → 对策/应用条件`。长篇证据链与部署实锤在思源笔记「wechat-selkies 部署笔记」踩坑记录节(20261104084756-iscp0o2),本台账只留可复用结论。
 
+## 2026-11-12
+
+- **客户端 WebContent 26h 涨到 2.7GB**:Activity Monitor 里进程名是页面 URL(`https://<host>:13001`),不是 Flutter 主进程;`footprint -p <pid>` 显示 `Malloc Small` 1.9GB + `WebKit Malloc` 723MB,`heap` 显示 3,091,157 个 `CMSampleBuffer`/`CMBlockBuffer`(约 26h×30fps),`WebCodecsVideoFrame` 仅 283 个。**根因**:macOS WebCodecs 在页面隐藏/停止 rAF 时不释放 VideoToolbox/CoreMedia 资源;Selkies 页面(`selkies-core.js`)只停止绘制,仍持续 `VideoDecoder.decode`,decoder 也未在 visibilitychange 时 close。**对策**:document-start 注入 `videoDecoderVisibilityGuardScript`(2026-11-12 已实现),后台关闭全部 `VideoDecoder` 并丢弃 decode,回前台再关一次让页面按自身 `decoder closed → initializeDecoder` 路径重建;Node mock 已验开关/丢弃逻辑,长时间挂机待复测。排查关键:先 `footprint`/`heap` 看归属,别把 WebContent 当成 Flutter 主进程。
+
 ## 2026-11-09
 
 - **最大化窗口→WS 反复断开**:Selkies 页面监听 resize 发 `r,<宽>x<高>`(宽高=逻辑尺寸×DPR,Retina ×2),服务端 `MAX_RES=1280x720` 钉死 → 超限请求触发管线反复重建失败,WS 断连循环;非最大化窗口尺寸小,不触发。**对策**:应急=客户端首页「串流预设」手动分辨率=开+1280x720+HiDPI=关(已实测修复);根治=客户端注入钳制脚本(2026-11-09 已实现,`resolutionClampScript` patch WebSocket/RTCDataChannel 的 send,超连接配置上限等比缩小后放行,默认上限 1280x720,零配置)。诊断关键:对照 camoufox 真浏览器同 URL 存活(排除服务端)+ localStorage 回放(排除设置污染)+ 裸 WS 重放 `r,3840x2100`(无视频流时不崩,说明崩因在流式会话中的超限请求)。
