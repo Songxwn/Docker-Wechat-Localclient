@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
@@ -46,6 +47,8 @@ class _WebViewScreenState extends State<WebViewScreen>
   DateTime? _lastAutoImageAt;
   DateTime? _suppressAutoImageUntil;
   String? _lastAutoImageSig;
+  Timer? _decoderSuspendTimer;
+  bool _decoderSuspended = false;
   static bool _clipboardHintShown = false;
 
   Connection get conn => widget.connection;
@@ -97,15 +100,46 @@ class _WebViewScreenState extends State<WebViewScreen>
 
   @override
   void dispose() {
+    _decoderSuspendTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 用户从其它应用复制图片后切回客户端：自动把图片推到远端。
     if (state == AppLifecycleState.resumed) {
+      _decoderSuspendTimer?.cancel();
+      _decoderSuspendTimer = null;
+      if (_decoderSuspended) {
+        _decoderSuspended = false;
+        _setDecoderActive(true);
+      }
+      // 用户从其它应用复制图片后切回客户端：自动把图片推到远端。
       _autoPushClipboardImage();
+      return;
+    }
+
+    // 失焦/隐藏后给 30s 宽限，快速切窗口不触发解码器重建。
+    // WKWebView 不一定把窗口失焦反映成 document.hidden，rAF 也可能继续跑，
+    // 所以不能只靠页内 visibilitychange。
+    _decoderSuspendTimer?.cancel();
+    _decoderSuspendTimer = Timer(const Duration(seconds: 30), () {
+      if (!mounted || _decoderSuspended) return;
+      _decoderSuspended = true;
+      _setDecoderActive(false);
+    });
+  }
+
+  Future<void> _setDecoderActive(bool active) async {
+    final c = _controller;
+    if (c == null) return;
+    try {
+      await c.evaluateJavascript(
+        source: 'window.__selkiesDecoderGuardSetActive && '
+            'window.__selkiesDecoderGuardSetActive(${active ? 'true' : 'false'})',
+      );
+    } catch (e) {
+      debugPrint('[decoder-guard] setActive($active) failed: $e');
     }
   }
 

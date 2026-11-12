@@ -2,6 +2,10 @@
 
 > 条目格式:`日期 | 现象 → 根因 → 对策/应用条件`。长篇证据链与部署实锤在思源笔记「wechat-selkies 部署笔记」踩坑记录节(20261104084756-iscp0o2),本台账只留可复用结论。
 
+## 2026-11-13
+
+- **只做页内 `hidden`/rAF 判断不够**:5.6.6 装后 10h,WebContent 仍涨到 1.59GB(1.79M `CMSampleBuffer`/`CMBlockBuffer`,约 50fps)。WKWebView 在应用失焦/被其它窗口遮挡时可能保持 `document.hidden=false` 且 rAF 继续跑,页内 guard 不触发,Selkies 继续 decode。**对策**:Dart `didChangeAppLifecycleState` 非 `resumed` 30s 后调 `window.__selkiesDecoderGuardSetActive(false)`(强制后台:close 全部 decoder + 丢弃 decode),回前台 `true` 再 close 一次让页面重建。**铁律**:macOS WebCodecs 资源回收不能只信 page visibility,应用生命周期信号必须并上;只用 `ps rss`/页内脚本验证会漏掉这条路径。
+
 ## 2026-11-12
 
 - **客户端 WebContent 26h 涨到 2.7GB**:Activity Monitor 里进程名是页面 URL(`https://<host>:13001`),不是 Flutter 主进程;`footprint -p <pid>` 显示 `Malloc Small` 1.9GB + `WebKit Malloc` 723MB,`heap` 显示 3,091,157 个 `CMSampleBuffer`/`CMBlockBuffer`(约 26h×30fps),`WebCodecsVideoFrame` 仅 283 个。**根因**:macOS WebCodecs 在页面隐藏/停止 rAF 时不释放 VideoToolbox/CoreMedia 资源;Selkies 页面(`selkies-core.js`)只停止绘制,仍持续 `VideoDecoder.decode`,decoder 也未在 visibilitychange 时 close。**对策**:document-start 注入 `videoDecoderVisibilityGuardScript`(2026-11-12 已实现),后台关闭全部 `VideoDecoder` 并丢弃 decode,回前台再关一次让页面按自身 `decoder closed → initializeDecoder` 路径重建;Node mock 已验开关/丢弃逻辑,长时间挂机待复测。排查关键:先 `footprint`/`heap` 看归属,别把 WebContent 当成 Flutter 主进程。

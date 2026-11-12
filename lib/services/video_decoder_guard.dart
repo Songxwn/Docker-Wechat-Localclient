@@ -22,6 +22,7 @@ String videoDecoderVisibilityGuardScript() => r'''
   var decoders = [];
   var lastRaf = Date.now();
   var hidden = false;
+  var forcedBackground = false;
 
   function raf(){
     lastRaf = Date.now();
@@ -32,6 +33,7 @@ String videoDecoderVisibilityGuardScript() => r'''
   // document.hidden 覆盖最小化/切后台；rAF 停止覆盖窗口被遮挡但页面仍报
   // visible 的情况。两者任一成立都视为后台。
   function isBackground(){
+    if (forcedBackground) return true;
     try {
       if (document.hidden || document.visibilityState === 'hidden') return true;
     } catch(e) {}
@@ -45,6 +47,14 @@ String videoDecoderVisibilityGuardScript() => r'''
     }
     decoders.length = 0;
   }
+
+  // Flutter 生命周期信号：WKWebView 不一定会把“应用失焦/被遮挡”反映成
+  // document.hidden，rAF 也可能继续跑；此时由 Dart 侧在失焦 30s 后调用
+  // setActive(false)，回前台再调用 setActive(true)。
+  window.__selkiesDecoderGuardSetActive = function(active){
+    forcedBackground = !active;
+    closeAll();
+  };
 
   function install(){
     var VD = window.VideoDecoder;
