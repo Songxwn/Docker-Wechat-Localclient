@@ -4,6 +4,8 @@
 
 ## 2026-11-13
 
+- **「ping 正常」不等于链路可用**:用户报「黑屏,但网络没问题」,实测小包 ping 7ms/0% 丢包,大包(1400B)丢包 0~37.5% 剧烈抖动,QNAP 全部服务吞吐同步崩到 0~70KB/s(Infisical 5.9KB/s、Portainer 1KB/s),而本机公网基线 1.1MB/s 正常。服务端日志实锤 `Backpressure TRIGGERED S:707, C:1`——发 707 帧客户端只消费 1 帧,视频大帧在丢包链路上传不动 → 页面永远等首帧。**对策**:客户端加链路吞吐采样(页内同源 fetch 截断读 + 6s 超时),低于 1.2MB/s 直接提示实测速率;处置=换网络路径(如手机热点对照)或降帧率/质量。**铁律**:排查「服务端健康但客户端收不到数据」必须测**大包**丢包与**实际吞吐**,不能只看 ping/小包延迟;跨多个服务的吞吐同步崩 = 链路层问题,不要继续在单服务里找。
+
 - **localStorage 残留导致「Waiting for stream...」永久黑屏**:客户端 5.6.7 连上后卡在等待流,同一 URL 真浏览器(camoufox,干净 localStorage)画面正常、容器日志 `START_VIDEO`→`Capture started` 全通、无背压告警。app 的 WKWebView localStorage 里积了 107 个键(跨版本迭代 + 页内改设置 + 服务端 settings 下发覆盖),其中 `_encoder='jpeg'`、`framerate=60`、`___selkies_pipesnap={"video":false,...}` 污染建流参数。**清空后立即恢复**(微信画面正常渲染)。**对策**:连接页加「重置页面状态」按钮(`SelkiesPresetScript.resetStorageScript`,按两个命名空间前缀清键后 reload);排查用 `--dart-define=SELKIES_NO_INJECT=1` 二分注入脚本。**铁律**:客户端类"黑屏但服务端健康"问题,先做「真浏览器同 URL 对照」+「清 localStorage 对照」两步,能省掉大半排查;WKWebView 的持久化状态比浏览器脏得多,跨版本更甚。
 - **只做页内 `hidden`/rAF 判断不够**:5.6.6 装后 10h,WebContent 仍涨到 1.59GB(1.79M `CMSampleBuffer`/`CMBlockBuffer`,约 50fps)。WKWebView 在应用失焦/被其它窗口遮挡时可能保持 `document.hidden=false` 且 rAF 继续跑,页内 guard 不触发,Selkies 继续 decode。**对策**:Dart `didChangeAppLifecycleState` 非 `resumed` 30s 后调 `window.__selkiesDecoderGuardSetActive(false)`(强制后台:close 全部 decoder + 丢弃 decode),回前台 `true` 再 close 一次让页面重建。**铁律**:macOS WebCodecs 资源回收不能只信 page visibility,应用生命周期信号必须并上;只用 `ps rss`/页内脚本验证会漏掉这条路径。
 

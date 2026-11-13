@@ -81,6 +81,34 @@ void main() {
     expect(src, contains('charCodeAt(0)===114&&d.charCodeAt(1)===44'));
   });
 
+  test('链路吞吐采样脚本：同源 fetch + 截断读取 + 结果字段', () {
+    final src = SelkiesPresetScript.throughputProbeScript(
+      url: 'https://h:13001/manifest.json',
+      maxBytes: 131072,
+      rounds: 2,
+      timeoutMs: 4000,
+    );
+    expect(src, contains("url='https://h:13001/manifest.json'"));
+    expect(src, contains('MAX=131072'));
+    expect(src, contains('ROUNDS=2'));
+    expect(src, contains('TMO=4000'));
+    // 同源 + 绕缓存，且用 AbortController 截断而非下完整文件
+    expect(src, contains("cache:'no-store'"));
+    expect(src, contains("credentials:'same-origin'"));
+    expect(src, contains('AbortController'));
+    expect(src, contains('rd.cancel()'));
+    // 返回结构
+    expect(src, contains('ok:true,bps:'));
+    expect(src, contains('elapsedMs:'));
+  });
+
+  test('链路吞吐采样脚本：URL 单引号转义不破坏脚本', () {
+    final src = SelkiesPresetScript.throughputProbeScript(
+      url: "https://h:13001/a'b.json",
+    );
+    expect(src, contains(r"a\'b.json"));
+  });
+
   test('重置页面状态脚本：双命名空间前缀过滤 + 只删命中键', () {
     final src = SelkiesPresetScript.resetStorageScript();
     // 两套命名空间派生规则都要有

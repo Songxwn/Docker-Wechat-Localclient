@@ -407,6 +407,66 @@ pt(window.RTCDataChannel&&window.RTCDataChannel.prototype);
 ''';
   }
 
+  /// 链路吞吐采样脚本（page-context）。
+  ///
+  /// 背景（2026-11-13）：画面卡在 “Waiting for stream...” 的另一类原因是
+  /// 链路吞吐崩塌（Tailscale 直连大包丢包 → 视频大帧传不动），服务端日志
+  /// 表现为 `Backpressure TRIGGERED S:707, C:1`。这类问题 ping 延迟正常，
+  /// 用户难以自查，因此在页内采样吞吐并据此提示。
+  ///
+  /// 同源 GET 采样：`fetch` 带 `cache: 'no-store'`，读 [url] 前 [maxBytes]
+  /// 字节即中止（AbortController），避免真把大文件下完。返回
+  /// `{"ok":bool,"bps":number,"elapsedMs":number,"bytes":number,"rounds":n}`。
+  ///
+  /// 放在页内而非 Dart 侧：同源请求自动带已有的证书信任与 cookie，且测的
+  /// 正是页面实际使用的这条链路（Dart HTTP 走自己的证书栈，结果会偏）。
+  static String throughputProbeScript({
+    required String url,
+    int maxBytes = 262144,
+    int rounds = 3,
+    int timeoutMs = 6000,
+  }) {
+    final safeUrl = url.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    return '''
+(async function(){
+try{
+var url='$safeUrl',MAX=$maxBytes,ROUNDS=$rounds,TMO=$timeoutMs;
+var bytes=0,okCount=0;
+var t0=(window.performance||Date).now();
+for(var i=0;i<ROUNDS;i++){
+var ctl=null,to=null;
+try{
+ctl=new AbortController();
+to=setTimeout(function(){try{ctl.abort();}catch(e){}},TMO);
+var r=await fetch(url,{cache:'no-store',credentials:'same-origin',signal:ctl.signal});
+if(!r.ok){throw new Error('HTTP '+r.status);}
+var rd=r.body&&r.body.getReader?r.body.getReader():null;
+if(rd){
+var got=0;
+while(got<MAX){
+var step=await rd.read();
+if(step.done)break;
+got+=step.value.length;
+if(got>=MAX){try{rd.cancel();}catch(e){}break;}
+}
+bytes+=got;
+}else{
+var buf=await r.arrayBuffer();
+var n=Math.min(buf.byteLength,MAX);
+bytes+=n;
+}
+okCount++;
+}catch(e){
+}finally{ if(to)clearTimeout(to); }
+}
+var ms=(window.performance||Date).now()-t0;
+if(okCount===0||ms<=0){return JSON.stringify({ok:false,bps:0,elapsedMs:ms,bytes:bytes,rounds:ROUNDS});}
+return JSON.stringify({ok:true,bps:Math.round(bytes/(ms/1000)),elapsedMs:Math.round(ms),bytes:bytes,rounds:okCount});
+}catch(e){return JSON.stringify({ok:false,bps:0,elapsedMs:0,bytes:0,rounds:0,error:String(e)});}
+})();
+''';
+  }
+
   /// 重置页面状态脚本：清除当前 origin+path 命名空间下的全部 Selkies 键。
   ///
   /// 背景（2026-11-13）：WKWebView 的 localStorage 跨版本累积残留键

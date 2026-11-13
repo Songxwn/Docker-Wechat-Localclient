@@ -49,6 +49,8 @@ class _WebViewScreenState extends State<WebViewScreen>
   String? _lastAutoImageSig;
   Timer? _decoderSuspendTimer;
   bool _decoderSuspended = false;
+  Timer? _linkProbeTimer;
+  bool _linkProbeDone = false;
   static bool _clipboardHintShown = false;
 
   Connection get conn => widget.connection;
@@ -101,6 +103,7 @@ class _WebViewScreenState extends State<WebViewScreen>
   @override
   void dispose() {
     _decoderSuspendTimer?.cancel();
+    _linkProbeTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -291,6 +294,53 @@ class _WebViewScreenState extends State<WebViewScreen>
 
   /// 存储诊断：dump 页面 localStorage 全键、命名空间与帧率值，
   /// 用于排查预设未生效（键名/命名空间不一致）。
+  /// 链路吞吐探测：页面加载完成后延迟执行，避免与首屏资源争带宽。
+  ///
+  /// 画面停在 “Waiting for stream...” 有两种常见原因——本机 localStorage
+  /// 污染（用 ⟲ 重置），或链路吞吐不足（大包丢包时 ping 仍正常，用户难以
+  /// 自查）。这里采样一次吞吐，明显不足时提示，把「干等」变成可诊断信息。
+  void _scheduleLinkProbe() {
+    _linkProbeTimer?.cancel();
+    _linkProbeTimer = Timer(const Duration(seconds: 6), _probeLinkQuality);
+  }
+
+  Future<void> _probeLinkQuality() async {
+    final c = _controller;
+    if (c == null || !mounted || _linkProbeDone) return;
+    _linkProbeDone = true;
+    dynamic raw;
+    try {
+      raw = await c.evaluateJavascript(
+        source: SelkiesPresetScript.throughputProbeScript(
+          url: '${conn.url.replaceAll(RegExp(r'/+$'), '')}/manifest.json',
+        ),
+      );
+    } catch (e) {
+      debugPrint('[link] probe failed: $e');
+      return;
+    }
+    if (!mounted || raw == null) return;
+    Map<String, dynamic>? m;
+    try {
+      final decoded = jsonDecode(raw.toString());
+      if (decoded is Map) m = Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    if (m == null) return;
+    final ok = m['ok'] == true;
+    final bps = (m['bps'] as num?)?.toDouble() ?? 0;
+    debugPrint('[link] throughput ok=$ok bps=$bps');
+    if (!ok) return;
+    // 720p60 JPEG 实测约需 2.5 MB/s；低于 1.2 MB/s 会明显卡顿/黑屏。
+    const minBps = 1200 * 1024.0;
+    if (bps >= minBps) return;
+    final kb = (bps / 1024).toStringAsFixed(0);
+    final msg = bps <= 0
+        ? '链路吞吐过低（测速未拿到数据），画面可能一直等待。请检查网络或稍后重试。'
+        : '链路吞吐偏低（约 $kb KB/s），720p 串流可能卡在等待首帧。'
+            '可降低预设的帧率/质量，或检查网络（大包丢包时 ping 仍正常）。';
+    _showSnack(msg);
+  }
+
   /// 重置页面状态：清空该连接命名空间下的 Selkies 键后重载。
   ///
   /// WKWebView 的 localStorage 跨版本累积残留会污染建流参数（画面停在
@@ -758,6 +808,7 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
           _clipboardHintShown = true;
           _showSnack('右上角按钮双向同步剪贴板：粘贴=本机→远端，复制=远端→本机');
         }
+        _scheduleLinkProbe();
       },
       // 忽略 SSL 证书错误（仅当连接配置开启时）
       onReceivedServerTrustAuthRequest: (controller, challenge) async {
