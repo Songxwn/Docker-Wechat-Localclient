@@ -407,6 +407,36 @@ pt(window.RTCDataChannel&&window.RTCDataChannel.prototype);
 ''';
   }
 
+  /// 重置页面状态脚本：清除当前 origin+path 命名空间下的全部 Selkies 键。
+  ///
+  /// 背景（2026-11-13）：WKWebView 的 localStorage 跨版本累积残留键
+  /// （如 `_encoder=jpeg`、`_pipesnap.video=false`、旧 `_crash_count`），
+  /// 会污染页面启动参数，导致建流失败、画面停在 “Waiting for stream...”。
+  /// 真浏览器（干净 localStorage）同 URL 正常；清空后客户端也恢复正常。
+  ///
+  /// 只删两个命名空间前缀下的键（新版 origin+pathname / 旧版 href），
+  /// 不碰其它来源的数据。删完由调用方 reload，预设注入会重新写入。
+  ///
+  /// 返回 `{"removed":N,"ns1":...,"ns2":...}` JSON 字符串。
+  static String resetStorageScript() {
+    return '''
+(function(){
+try{
+var ns1=(window.location.origin+window.location.pathname).replace(/[^a-zA-Z0-9._-]/g,'_');
+var ns2=window.location.href.split('#')[0].replace(/[^a-zA-Z0-9.-_]/g,'_');
+var p1=ns1+'_',p2=ns2+'_';
+var kill=[];
+for(var i=0;i<localStorage.length;i++){
+var k=localStorage.key(i);
+if(k&&(k.indexOf(p1)===0||k.indexOf(p2)===0))kill.push(k);
+}
+for(var j=0;j<kill.length;j++){try{localStorage.removeItem(kill[j]);}catch(e){}}
+return JSON.stringify({removed:kill.length,ns1:ns1,ns2:ns2});
+}catch(e){return JSON.stringify({removed:0,error:String(e)});}
+})();
+''';
+  }
+
   /// 追踪脚本（document-start，常驻）：记录页内用户意图修改的键。
   ///
   /// Selkies dashboard 经 `window.postMessage` 把用户操作发给 core

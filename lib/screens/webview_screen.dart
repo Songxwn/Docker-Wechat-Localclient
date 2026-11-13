@@ -291,6 +291,53 @@ class _WebViewScreenState extends State<WebViewScreen>
 
   /// 存储诊断：dump 页面 localStorage 全键、命名空间与帧率值，
   /// 用于排查预设未生效（键名/命名空间不一致）。
+  /// 重置页面状态：清空该连接命名空间下的 Selkies 键后重载。
+  ///
+  /// WKWebView 的 localStorage 跨版本累积残留会污染建流参数（画面停在
+  /// “Waiting for stream...”）。确认后清空 + 重载，预设注入随即重写。
+  Future<void> _resetPageStorage() async {
+    final c = _controller;
+    if (c == null || !mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('重置页面状态'),
+        content: const Text(
+          '清除此页面保存的全部串流设置（分辨率、编码器、帧率、流开关等），'
+          '然后重新加载。\n\n'
+          '用于画面卡在「Waiting for stream...」或设置异常时。'
+          '首页「串流预设」不受影响，重载后会重新写入。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('重置并重载'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    var removed = 0;
+    try {
+      final raw = await c.evaluateJavascript(
+        source: SelkiesPresetScript.resetStorageScript(),
+      );
+      if (raw != null) {
+        final m = jsonDecode(raw.toString());
+        if (m is Map && m['removed'] is int) removed = m['removed'] as int;
+      }
+    } catch (e) {
+      debugPrint('[reset] eval failed: $e');
+    }
+    if (!mounted) return;
+    _showSnack('已清除 $removed 项页面设置，正在重载…');
+    await c.reload();
+  }
+
   Future<void> _dumpStorage() async {
     final c = _controller;
     if (c == null || !mounted) return;
@@ -621,6 +668,11 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
               onPressed: _dumpStorage,
             ),
             IconButton(
+              tooltip: '重置页面状态（清空串流设置后重载）',
+              icon: const Icon(Icons.restart_alt),
+              onPressed: _resetPageStorage,
+            ),
+            IconButton(
               tooltip: '刷新',
               icon: const Icon(Icons.refresh),
               onPressed: () => _controller?.reload(),
@@ -656,13 +708,18 @@ return JSON.stringify({url:window.location.href,ns1:ns1,ns2:ns2,framerate:fr,cou
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
             forMainFrameOnly: true,
           );
+    // 诊断开关：--dart-define=SELKIES_NO_INJECT=1 时禁用全部注入脚本，
+    // 用于二分定位「哪个脚本导致页面黑屏/收不到帧」。
+    const noInject = bool.fromEnvironment('SELKIES_NO_INJECT');
     final scripts = <UserScript>[
-      _videoDecoderGuard,
-      _clipboardSocketHook,
-      _clipboardTakeover,
-      _resolutionClampScript,
-      if (_presetScript != null) _presetScript!,
-      _trackerScript,
+      if (!noInject) ...[
+        _videoDecoderGuard,
+        _clipboardSocketHook,
+        _clipboardTakeover,
+        _resolutionClampScript,
+        if (_presetScript != null) _presetScript!,
+        _trackerScript,
+      ],
     ];
     return InAppWebView(
       initialUrlRequest: URLRequest(

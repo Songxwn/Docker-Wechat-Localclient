@@ -81,6 +81,20 @@ void main() {
     expect(src, contains('charCodeAt(0)===114&&d.charCodeAt(1)===44'));
   });
 
+  test('重置页面状态脚本：双命名空间前缀过滤 + 只删命中键', () {
+    final src = SelkiesPresetScript.resetStorageScript();
+    // 两套命名空间派生规则都要有
+    expect(src, contains("location.origin+window.location.pathname"));
+    expect(src, contains("href.split('#')[0]"));
+    // 前缀匹配后 removeItem，不动其它来源
+    expect(src, contains("ns1+'_'"));
+    expect(src, contains("ns2+'_'"));
+    expect(src, contains('indexOf(p1)===0||k.indexOf(p2)===0'));
+    expect(src, contains('localStorage.removeItem(kill[j])'));
+    // 返回删除计数供 Dart 报告
+    expect(src, contains('removed:kill.length'));
+  });
+
   test('StreamPreset 默认全跟随、无显式值', () {
     const p = StreamPreset();
     expect(p.hasExplicit, false);
