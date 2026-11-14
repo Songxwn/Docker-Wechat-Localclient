@@ -6,8 +6,14 @@
 
 ## 功能
 
-- **多连接管理**：保存多个 wechat-selkies 连接（名称、地址、SSL / 浏览器选项、可选账号密码），支持添加、编辑、删除、设为默认
+- **链接前串流预设**：首页每条连接下直接展开设置分辨率、编码、帧率、码率、音视频开关等全部串流设置，改完即保存，连接时自动生效；打破“设置不匹配→不停重连→页内设置打不开”的死循环（默认全部跟随服务端，不动原有行为）。退出连接时页内修改自动同步回首页预设，下次连接沿用；连接页标题栏 🐞 按钮可查看存储诊断，排查预设未生效
+- **分辨率请求自动钳制**：页面跟随窗口发出的 `r,宽x高` 分辨率请求若超过「服务端最大分辨率」（连接表单可选字段，留空 = 1280x720），注入脚本自动等比缩小（宽高取偶）后再放行——服务端 MAX_RES 钉死时，最大化窗口/Retina 高倍率产生的超限请求会导致串流管线反复重建失败、WS 断连循环，此功能免配置根治（跟随窗口行为保留，小窗口请求不受影响）
+- **重置页面状态**：连接页标题栏 ⟲ 按钮可一键清除该页面保存的全部串流设置（分辨率、编码器、帧率、流开关等）并重载。用于画面卡在「Waiting for stream...」或设置异常时——长期使用后 webview 的 localStorage 会跨版本累积残留键，污染建流参数导致黑屏；首页「串流预设」不受影响，重载后自动重新写入
+- **链路质量提示**：连接后自动在页内采样一次吞吐（同源小范围下载，不额外拉大文件），低于 720p 串流所需带宽时直接提示实测速率与排查方向。链路丢包时 ping 延迟可能完全正常但大包传不动，服务端侧表现为背压（发了 N 帧只消费个位数），画面就会一直等待首帧——此提示把「干等」变成可诊断信息
 - **应用内 WebView**：在应用内直接打开网页版微信（Android / iOS / macOS / Web）
+- **剪贴板双向同步（客户端接管）**：注入脚本强制关闭 Selkies 页面自带的三项同步（`clipboard_in_enabled` / `clipboard_out_enabled` / `clipboard_seamless`），避免网页层与本客户端互相覆盖——否则页面会自动读取本机剪贴板推送远端、并把服务端推送写回本机，「本机→远端」刚推的内容会被远端回推覆盖。接管后：**上行**用连接页标题栏粘贴按钮（图片经 `pasteboard` 转 PNG，上限 16 MB），文本走 `clipboardUpdateFromUI`，图片走 `cb,<mime>,<base64>`；**下行**只在点击「拉取」按钮（复制图标）时经 `cr` 请求取回，大图分片显示进度条，平时服务端推送只更新缓存不覆盖本机剪贴板。自推送回声（文本/图片签名）会被忽略，不回灌本机。不依赖浏览器 `clipboard-read` 权限，WKWebView / Safari 下同样可用；图片需开启二进制剪贴板
+- **后台解码器释放（macOS 内存保护）**：WebCodecs 在页面隐藏/停止绘制时不释放 VideoToolbox/CoreMedia 资源；客户端在页面不可见、rAF 停止，或应用失焦 30 秒后关闭 `VideoDecoder` 并丢弃后台 decode，回到前台再重建，避免长期挂机后 WebContent 内存涨到数 GB
+- **远端文件批量管理**：由部署侧 [filebrowser](https://hub.docker.com/r/filebrowser/filebrowser) 侧车承担（挂同一 `wechat` 数据卷），客户端不内置文件面板；连接可配置 FileBrowser 地址，连接页标题栏文件夹按钮一键跳系统浏览器（已配置且探测可达才显示该按钮）；上游 Selkies file-manager API 无 delete 端点，删除（永久）类操作集中在 filebrowser
 - **系统浏览器打开**：可按连接配置使用系统默认浏览器打开（全平台，Windows / Linux 桌面默认使用此方式）
 - **忽略 SSL 证书错误**：适配 wechat-selkies 常见的自签名 HTTPS
 - **HTTP Basic 认证**：连接时可配置用户名 / 密码，自动完成鉴权（适用于 wechat-selkies 配置了 PASSWORD 等鉴权时）
@@ -35,16 +41,19 @@
 lib/
 ├── main.dart                     # 应用入口、主题、Provider 注入
 ├── models/
-│   └── connection.dart           # 连接数据模型 + 序列化
+│   └── connection.dart           # 连接数据模型 + 串流预设模型 + 序列化
 ├── services/
 │   ├── storage_service.dart      # shared_preferences 持久化
-│   └── platform_service.dart     # 平台能力检测 / 外部浏览器 / URL 规范化
+│   ├── platform_service.dart     # 平台能力检测 / 外部浏览器 / URL 规范化
+│   ├── clipboard_bridge.dart     # 本机剪贴板 → Selkies 页面注入脚本
+│   └── selkies_preset.dart       # 预设→Selkies localStorage 注入脚本生成
 ├── providers/
 │   └── connection_store.dart     # 连接状态管理（增删改 / 默认）
 └── screens/
-    ├── home_screen.dart          # 首页：连接列表 + 使用说明 + 页脚
+    ├── home_screen.dart          # 首页：连接列表（含串流预设直改）+ 使用说明 + 页脚
     ├── connection_form_dialog.dart  # 添加 / 编辑连接弹窗
-    └── webview_screen.dart       # 应用内 WebView（SSL 忽略 + Basic Auth）
+    ├── stream_preset_editor.dart # 串流预设编辑器（视频/音频/显示/输入/剪贴板）
+    └── webview_screen.dart       # 应用内 WebView（SSL 忽略 + Basic Auth + 预设注入）
 ```
 
 ## 环境要求
@@ -97,7 +106,7 @@ CI 会在 `flutter build windows` 之后，使用 [Inno Setup](https://jrsoftwar
 ```bash
 flutter build windows --release
 # 需安装 Inno Setup 6，然后：
-ISCC.exe /DAppVersion=5.0.0 windows_installer.iss
+ISCC.exe /DAppVersion=5.3.0 windows_installer.iss
 # 安装包输出在 installer\ 目录
 ```
 
@@ -110,7 +119,10 @@ ISCC.exe /DAppVersion=5.0.0 windows_installer.iss
 1. 确保 wechat-selkies 已在 Docker 或远程服务器上运行，记下访问地址（如 `https://localhost:3001` 或 `https://服务器IP:3001`）。
 2. 启动本客户端，点击「添加连接」填写名称与服务地址，按需设置忽略 SSL、系统浏览器打开、账号密码，保存。
 3. 在列表中点击「连接」打开该 wechat-selkies 页面；可「编辑」「删除」或「设为默认」。
-4. 首次启动会自动创建默认连接「本地微信」（`https://localhost:3001`），可直接编辑或新增。
+4. 要把本机内容粘进远端微信：本机复制文字或图片 → 点连接页标题栏的剪贴板按钮（图片优先；上限 16 MB）→ 在远端微信按 Ctrl+V。图片需复制“图片内容”（截图、预览/浏览器里复制）；Finder 里直接复制图片文件只带文件路径，请先打开图片再复制。切回客户端窗口时也会自动同步图片。反向：在远端微信复制文字/图片后，会写回本机剪贴板（图片需在 Selkies 侧栏开启 Image Support，或在预设把“二进制剪贴板”设为开）；若被动同步未生效，点标题栏的「复制」图标主动拉取远端剪贴板到本机。也可在 Selkies 侧栏 Clipboard 文本框粘贴文字后点击框外发送（自动同步依赖浏览器剪贴板权限，失败时用这两条路径）。
+5. 要把远端微信收到的文件批量下载/删除：先在连接配置里填 FileBrowser 地址（如 `http://<NAS>:13085`，与微信容器挂同一数据卷），连接页标题栏的文件夹按钮即跳系统浏览器打开；勾选多选即可，删除为永久删除。
+6. 首次启动会自动创建默认连接「本地微信」（`https://localhost:3001`），可直接编辑或新增。
+7. 若连接后画面不停刷新/重连（多为分辨率、编码等设置与服务端不匹配）：断开回到首页 → 在该连接下展开「串流预设」→ 把可疑项改成与服务端一致的值（如手动分辨率 1280x720，改完即保存）→ 点「连接」重连。链接后仍可在 Selkies 页内继续调整，退出时页内修改会自动同步回首页预设。分辨率类不匹配已被「服务端最大分辨率」自动钳制根治（编辑连接里可改，默认 1280x720），无需再手动锁预设
 
 ## 相关链接
 

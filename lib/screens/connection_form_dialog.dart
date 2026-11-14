@@ -4,6 +4,7 @@ import '../models/connection.dart';
 import '../services/platform_service.dart';
 
 /// 添加 / 编辑连接的弹窗。返回保存后的 Connection，取消返回 null。
+/// 注：串流预设不在此编辑，首页每条连接下直接展开修改（改完即保存）。
 class ConnectionFormDialog extends StatefulWidget {
   final Connection? existing;
 
@@ -26,8 +27,11 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
   late final TextEditingController _url;
   late final TextEditingController _username;
   late final TextEditingController _password;
+  late final TextEditingController _fileBrowserUrl;
+  late final TextEditingController _maxResolution;
   late bool _ignoreSsl;
   late bool _openExternal;
+  late bool _imeFix;
   bool _obscure = true;
 
   @override
@@ -38,8 +42,11 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
     _url = TextEditingController(text: c?.url ?? kDefaultUrl);
     _username = TextEditingController(text: c?.username ?? '');
     _password = TextEditingController(text: c?.password ?? '');
+    _fileBrowserUrl = TextEditingController(text: c?.fileBrowserUrl ?? '');
+    _maxResolution = TextEditingController(text: c?.maxResolution ?? '');
     _ignoreSsl = c?.ignoreSsl ?? true;
     _openExternal = c?.openExternal ?? false;
+    _imeFix = c?.imeFix ?? true;
   }
 
   @override
@@ -48,6 +55,8 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
     _url.dispose();
     _username.dispose();
     _password.dispose();
+    _fileBrowserUrl.dispose();
+    _maxResolution.dispose();
     super.dispose();
   }
 
@@ -59,8 +68,11 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
       url: normalizeUrl(_url.text).isEmpty ? kDefaultUrl : normalizeUrl(_url.text),
       username: _username.text.trim(),
       password: _password.text,
+      fileBrowserUrl: normalizeUrl(_fileBrowserUrl.text),
+      maxResolution: _maxResolution.text.trim(),
       ignoreSsl: _ignoreSsl,
       openExternal: _openExternal,
+      imeFix: _imeFix,
     );
     Navigator.of(context).pop(result);
   }
@@ -124,6 +136,39 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _fileBrowserUrl,
+                  decoration: const InputDecoration(
+                    labelText: 'FileBrowser 地址（可选）',
+                    hintText: 'https://nas:13085',
+                    helperText: '连接页标题栏文件管理按钮跳转目标，留空则按钮提示未配置',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _maxResolution,
+                  decoration: const InputDecoration(
+                    labelText: '服务端最大分辨率（可选）',
+                    hintText: '1280x720',
+                    helperText: '页面分辨率请求超此值时自动等比缩小，防止最大化窗口断连；留空 = 1280x720',
+                  ),
+                  keyboardType: TextInputType.text,
+                  autocorrect: false,
+                  validator: (v) {
+                    final s = (v ?? '').trim();
+                    if (s.isEmpty) return null;
+                    final m = RegExp(r'^(\d+)x(\d+)$').firstMatch(s);
+                    final w = m == null ? null : int.tryParse(m.group(1)!);
+                    final h = m == null ? null : int.tryParse(m.group(2)!);
+                    if (w == null || h == null || w <= 0 || h <= 0) {
+                      return '格式如 1280x720';
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -141,6 +186,13 @@ class _ConnectionFormDialogState extends State<ConnectionFormDialog> {
                   onChanged: PlatformService.supportsInAppWebView
                       ? (v) => setState(() => _openExternal = v)
                       : null,
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('中文输入防吃字补丁'),
+                  subtitle: const Text('注入整段提交脚本（fork 自修，默认开启）'),
+                  value: _imeFix,
+                  onChanged: (v) => setState(() => _imeFix = v),
                 ),
               ],
             ),

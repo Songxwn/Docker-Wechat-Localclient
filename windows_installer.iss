@@ -2,7 +2,7 @@
 ; 由 GitHub Actions 在构建 Windows 版后调用编译生成 .exe 安装程序。
 
 #ifndef AppVersion
-  #define AppVersion "5.0.0"
+  #define AppVersion "5.3.0"
 #endif
 
 #define AppName "WeChat Selkies"
