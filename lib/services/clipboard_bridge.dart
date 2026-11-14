@@ -245,13 +245,19 @@ String clipboardTakeoverScript() => '''
   pin();
   try { setInterval(pin, 1000); } catch(e) {}
 
-  // 2) 掐断页面自动上行读取：readText/read 永不 resolve
+  // 2) 掐断页面自动上行读取：readText/read 立即 reject(NotAllowedError)。
+  //    不能用永不 resolve 的 pending promise——页面 focus 处理链 await 它,
+  //    挂起的 promise 会把后续逻辑(含流恢复相关链路)一起堵死;reject 走
+  //    页面自带的 catch("Could not read clipboard using advanced API on
+  //    focus")安全跳过。
   try {
-    var never = function(){ return new Promise(function(){}); };
+    var denied = function(){
+      return Promise.reject(new DOMException('denied', 'NotAllowedError'));
+    };
     var cb = navigator.clipboard;
     if (cb) {
-      try { Object.defineProperty(cb, 'readText', {value: never, configurable: true, writable: true}); } catch(e) {}
-      try { Object.defineProperty(cb, 'read', {value: never, configurable: true, writable: true}); } catch(e) {}
+      try { Object.defineProperty(cb, 'readText', {value: denied, configurable: true, writable: true}); } catch(e) {}
+      try { Object.defineProperty(cb, 'read', {value: denied, configurable: true, writable: true}); } catch(e) {}
     }
   } catch(e) {}
 })();
@@ -636,6 +642,31 @@ Future<RemoteClipboardSnapshot?> pullRemoteClipboard({
     } catch (_) {}
   }
 }
+
+/// 唤醒卡住的 Selkies 视频管线（cmd+tab 切回后画布冻结、需手动刷新的场景）。
+///
+/// 页面在 `visibilitychange` 里管视频:hidden → `STOP_VIDEO` + 清画布;
+/// visible → 重初始化 VideoDecoder + `START_VIDEO`。WKWebView 的 occlusion
+/// 状态常不随 app 重聚焦更新:`document.hidden` 卡在 true → 永不发
+/// `START_VIDEO`;或 hidden 虽为 false 但解码/渲染循环已停摆。两种情况
+/// 派发一次 synthetic `visibilitychange` 都会走页面的 visible 分支完成
+/// 恢复(等于浏览器里切一次标签页,走页面自带恢复路径)。
+String buildStreamAwakeScript() => '''
+(function(){
+  try {
+    if (document.hidden) {
+      try {
+        Object.defineProperty(Document.prototype, 'hidden',
+          {get: function(){ return false; }, configurable: true});
+        Object.defineProperty(Document.prototype, 'visibilityState',
+          {get: function(){ return 'visible'; }, configurable: true});
+      } catch (e) {}
+    }
+    document.dispatchEvent(new Event('visibilitychange'));
+    return 'kicked';
+  } catch (e) { return 'err:' + e; }
+})()
+''';
 
 class ClipboardBridgeException implements Exception {
   final String message;

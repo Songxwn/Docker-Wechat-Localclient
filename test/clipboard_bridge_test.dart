@@ -343,4 +343,11 @@ void main() {
     expect(buildClipboardImageScript('image/png', small), contains('ws.send("cb,"'));
     expect(kClipboardImageChunkBytes, 256 * 1024);
   });
+
+  test('切回唤醒脚本: 强制 visible + 派发 visibilitychange', () {
+    final js = buildStreamAwakeScript();
+    expect(js, contains("document.hidden"));
+    expect(js, contains("visibilitychange"));
+    expect(js, contains("'visible'"));
+  });
 }

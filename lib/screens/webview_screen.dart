@@ -117,6 +117,8 @@ class _WebViewScreenState extends State<WebViewScreen>
         _decoderSuspended = false;
         _setDecoderActive(true);
       }
+      // 画布冻结自愈:Kick 视频管线,再推剪贴板图片。
+      _kickStreamAwake();
       // 用户从其它应用复制图片后切回客户端：自动把图片推到远端。
       _autoPushClipboardImage();
       return;
@@ -131,6 +133,18 @@ class _WebViewScreenState extends State<WebViewScreen>
       _decoderSuspended = true;
       _setDecoderActive(false);
     });
+  }
+
+  /// cmd+tab 切回时唤醒 Selkies 视频管线（synthetic visibilitychange）。
+  Future<void> _kickStreamAwake() async {
+    final c = _controller;
+    if (c == null || !mounted) return;
+    try {
+      final r = await c.evaluateJavascript(source: buildStreamAwakeScript());
+      debugPrint('[stream] awake kick: $r');
+    } catch (e) {
+      debugPrint('[stream] awake kick failed: $e');
+    }
   }
 
   Future<void> _setDecoderActive(bool active) async {
