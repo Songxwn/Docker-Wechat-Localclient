@@ -29,6 +29,12 @@
 - **版本 bump 要用精确断言**:`sed s/5.5.1+1/5.6.0+1/` 在文件已是 5.5.2+1 时静默无操作,导致 tag 版本与产物不符、装的还是旧构建。**对策**:bump 后 `grep '^version'` 确认,并用 `python` 断言原值存在。
 - **诊断优先于推断**:剪贴板图片排查绕了三轮(猜 gating / 猜大小 / 猜协议),最后靠 `docker logs` 一行 `Invalid cbs message` 定位。**对策**:协议类问题第一时间抓服务端日志与容器内实际源码。
 
+## 2026-11-14
+
+- **WKWebView 重聚焦 occlusion 不回传 → 页面视频管线冻死**:页面靠 `visibilitychange` 管流(hidden→STOP_VIDEO,visible→START_VIDEO),macOS app cmd+tab 回来时 `document.hidden` 常卡 true,永停流。**对策**:`AppLifecycleState.resumed` 注入 synthetic `visibilitychange`(hidden 卡 true 先覆写 `Document.prototype` 的 getter),让页面走自带 visible 分支自愈;健康时多派发一次=其设计路径,无害。
+- **劫持 API 用 reject,别用 pending promise**:「永不 resolve」的 stub 会把 await 它的整条异步链挂死(页面 focus 处理链即中招);立即 reject(如 NotAllowedError)落进对方自带 catch,安全。
+- **并行会话同仓工作先 fetch 再定版本号**:tag 撞号(v5.6.7 已被占)+ push 被拒都可避免;发版前 `git fetch --tags` 看一眼远端最新 tag。
+
 ## 2026-11-08
 
 - **NSPasteboard MIME≠UTI 静默假成功**:`setData(data, forType: "image/png")` 返回 true 但存成无人识别的自定义类型,任何应用粘不出;`Pasteboard.writeImage` 兜底里 NSImage 解析失败同样静默丢 → snackbar 报成功、剪贴板实为旧图。**对策**:MIME→UTI 映射(public.png/public.jpeg/tiff/gif/bmp/webp)+ 写后读回自检(已实现于 `macos/Runner/MainFlutterWindow.swift` + `writeClipboardImage`)。铁律:剪贴板写入必须读回验证。
